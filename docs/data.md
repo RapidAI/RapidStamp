@@ -34,6 +34,6 @@ python training/scripts/finetune_real.py \
     --init-rec /path/to/best_rec.pt
 ```
 
-Paddle 的 zip 还没到位时，先不要传 `--paddle`。`import_paddle.py` 会直接退出。
+这一轮微调开始时，`paddle_seal.zip` 还不在上面的目录里，所以混合集只有合成页和 ReST。zip 传到之后再跑一次 `import_paddle.py` 和 `finetune_real.py`。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。

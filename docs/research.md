@@ -72,7 +72,7 @@ Paddle 的 seal det 解决的是「章上的字在哪里」，输入经常已经
 | PP-OCRv4 server rec | 更高，文件约 88MB | 服务端 | 超出「小」的目标 |
 | CRNN（CNN + BiLSTM + CTC） | 低于 SVTR / PP-OCRv4 | 小 | LSTM 能导出 ONNX，但 CPU 上不如等宽卷积 |
 | TrOCR / PARSeq | ReST 端到端前排在用 | 变压器，大 | 不适合本 SDK |
-| 本仓库 SealRec | 见 `models/metrics.json` 的合成条带准确率 | 1,501,326 参数，ONNX 约 5.8MB。CNN + 两层 Conv1d，CTC，无 RNN | 输入灰度 32×384，时间步 96 |
+| 本仓库 SealRec | 见 `models/metrics.json` | 封闭字表时 1,501,326 参数。并入 ReST 字后约 193 万参数、1,922 类，ONNX 约 7.4MB。CNN + 两层 Conv1d，CTC，无 RNN | 输入灰度 32×384，时间步 96 |
 
 SVTR 文档：<https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version2.x/algorithm/text_recognition/algorithm_rec_svtr.en.md>
 
@@ -86,9 +86,9 @@ PP-OCRv4 模型列表：<http://www.paddleocr.ai/main/version2.x/ppocr/model_lis
 
 | | 专用 CNN（本方案） | ≤1B 视觉语言模型 |
 | --- | --- | --- |
-| 代表 | PicoDet 级检测 + SVTR/CRNN 级 CTC。本仓库 SealDet 453,197 参数，SealRec 1,501,326 参数，合计约 1.95M | Florence-2-base 0.23B、Florence-2-large 0.77B（MIT）；GOT-OCR2.0 约 0.6B；SmolVLM2 256M / 500M（Apache-2.0）；Granite-Docling 258M；PaddleOCR-VL 约 0.9B |
+| 代表 | PicoDet 级检测 + SVTR/CRNN 级 CTC。本仓库 SealDet 453,197 参数，SealRec 约 193 万，合计约 2.4M | Florence-2-base 0.23B、Florence-2-large 0.77B（MIT）；GOT-OCR2.0 约 0.6B；SmolVLM2 256M / 500M（Apache-2.0）；Granite-Docling 258M；PaddleOCR-VL 约 0.9B |
 | 超过 1B、不能用 | — | Qwen2.5-VL-3B（约 3B–3.8B，含视觉塔）、Qwen2-VL-2B、Qwen3.5-2B（约 2.3B）。Qwen3-0.6B 只有文本塔 |
-| 体积 | ONNX 约 1.8MB（检测）+ 5.8MB（识别） | 几百 MB 到约 2GB（fp16） |
+| 体积 | ONNX 约 1.8MB（检测）+ 7.4MB（识别） | 几百 MB 到约 2GB（fp16） |
 | CPU 速度 | 开发机 ONNX Runtime CPU：检测约 3 ms，识别约 3 ms。圆章按 15° 搜 24 个起始角，一枚大约 70 ms | 即使 0.25B–0.6B，也要跑视觉编码器和自回归解码。公开笔记本测试里 Florence-2-large 在 GPU 上大约 5 秒/页，Qwen2.5-VL-3B 更慢。CPU 会再慢一个数量级以上 |
 | 印章环文 | 展开后就是普通横排，小模型专门学这一个分布 | 通用 OCR 对环文没有几何先验。可以微调，但微调后的解码器仍然重 |
 | 精度上限 | 域内可以很高；换一套真实扫描会掉，要靠真实数据微调 | 文档 OCR 的零样本能力更强，弯曲印章不是它们的训练分布，零样本不可靠 |
@@ -152,14 +152,28 @@ ReST 前三名都在真实 5,000 张之外合成了章：CCB 用公司名语料�
 
 训练顺序：合成数据预训练 → 在有授权的 ReST / CC BY 印章框上微调检测 → 用 ReST 标题转写和更多合成环文微调识别 → INT8 量化。VLM 只在第三步之后、CNN 仍有系统性环文错误时考虑做教师。
 
-## 9. 本仓库里已经落地的部分
+## 9. 训练机上的实测
+
+权重在 `models/`。检测 453,197 参数；识别在并入 ReST 转写后是 1,922 类（含空白），约 193 万参数。合计仍约 240 万，不到 1B 的千分之三。ONNX 约 1.8MB + 7.4MB。
+
+数字来自 `models/metrics.json`，是贴回页面之后的 hold-out，不是 RRC 官方 test（那 5,000 张没有转写）。Paddle 的 zip 在微调开始时还不在 `/home/mayong/datasets/paddle_seal/`，所以这轮没有用到。
+
+| | 检测召回 @0.5 | 标题整串命中 | 说明 |
+| --- | --- | --- | --- |
+| 合成验证页 | 0.998 | 0.231 | 框几乎全中。圆章公司名的中间两三个字经常被读成词表里另一个词，整串就失败 |
+| ReST 留出的 477 张 | 1.0 | 0.109 | 裁图贴回合成页之后，章都找到了，标题整串仍然难 |
+| 混合，检测 mAP50 | 0.798 | 0.194 | 横排数字（发票税号条）在识别条带上是 1.0；环文条带整串 0.314 |
+
+开发机上单次检测约 3ms、单次识别约 3ms。带 24 个起始角的整页推理，在训练机 CPU 上大约 200ms/页。
+
+## 10. 本仓库里已经落地的部分
 
 - `training/`：合成、训练、ONNX 导出、ReST 与 StaVer 的转换脚本。
 - `cpp/`：C API、与 Python 对齐的几何、ONNX Runtime 会话。CI 编 Linux x64、Linux arm64、Windows x64、macOS arm64，并交叉编译 Android arm64。
 - `python/`：PyPI 包 `rapidstamp`，cibuildwheel 打 Linux / Windows / macOS 轮子。
 - 权重和合成验证指标在训练后写入 `models/`。那份数字是合成 hold-out，不是 ReST。
 
-## 10. 已知缺口
+## 11. 已知缺口
 
 - 字表是封闭的。真实公司名里的生僻字会无法编码。
 - 三角章在 ReST 里很少，这一阶段没有单独的类。

@@ -1,0 +1,8 @@
+round_official
+oval
+square_personal
+finance
+invoice
+company_latin
+notary
+rect_stamp

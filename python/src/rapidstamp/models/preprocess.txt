@@ -1,0 +1,21 @@
+det_size 320
+grid 20
+rec_h 32
+rec_w 384
+r_in 0.72
+r_out 0.99
+start_deg 140.0
+span_deg 360.0
+pad_value 114
+score_thresh 0.25
+nms_thresh 0.45
+angle_steps 24
+box_logit_limit 4.0
+layout round_official circle
+layout oval ellipse
+layout square_personal grid
+layout finance ellipse
+layout invoice ellipse
+layout company_latin circle
+layout notary circle
+layout rect_stamp hline

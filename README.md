@@ -10,9 +10,9 @@ CPU 上的印章检测与识别。覆盖中文圆形公章、椭圆章、方形�
 | --- | --- | --- |
 | SealDet | 320 输入、20×20 单尺度检测，8 类 | 453,197 参数，ONNX 约 1.8MB |
 | 几何 | 圆/椭圆极坐标展开，方章按格切开，矩形取水平带 | 无参数 |
-| SealRec | 灰度 32×384，CNN-CTC，无 RNN | 1,501,326 参数，ONNX 约 5.8MB |
+| SealRec | 灰度 32×384，CNN-CTC，无 RNN | 约 193 万参数（1,922 类），ONNX 约 7.4MB |
 
-合成验证集上的 mAP、端到端标题召回和 CPU 延迟在训练后写入 `models/metrics.json`。那是合成 hold-out，不是 ICDAR ReST 的成绩。
+`models/metrics.json` 是合成页和 ReST 留出集混在一起的 hold-out，不是 ICDAR 官方 test。检测 mAP50 约 0.80，检测召回约 0.999；ReST 标题整串命中约 0.11。环文整串仍然是主要缺口。
 
 ## 目录
 
