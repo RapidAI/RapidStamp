@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from rapidstamp.ctc import ctc_greedy, prefer_reading
+from rapidstamp.rec_preproc import ppocr_nchw
 from rapidstamp.geometry import (
     decode_detections,
     estimate_ring_start,
@@ -73,6 +74,7 @@ class RapidStamp:
         score_thresh: float | None = None,
         nms_thresh: float | None = None,
         angle_steps: int | None = None,
+        fast: bool = False,
     ) -> None:
         import onnxruntime as ort
 
@@ -104,8 +106,19 @@ class RapidStamp:
         opts = ort.SessionOptions()
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         chosen = providers or ["CPUExecutionProvider"]
+        rec_file = "seal_rec_fast.onnx" if fast else "seal_rec.onnx"
+        charset_file = "charset_fast.txt" if fast else "charset.txt"
+        if fast and not (directory / rec_file).is_file():
+            raise FileNotFoundError(f"missing {rec_file} in {directory}")
+        if fast and (directory / charset_file).is_file():
+            self.charset = _read_lines(directory / charset_file)
         self.det = ort.InferenceSession(str(directory / "seal_det.onnx"), sess_options=opts, providers=chosen)
-        self.rec = ort.InferenceSession(str(directory / "seal_rec.onnx"), sess_options=opts, providers=chosen)
+        self.rec = ort.InferenceSession(str(directory / rec_file), sess_options=opts, providers=chosen)
+        rec_input = self.rec.get_inputs()[0]
+        self.rec_input_name = rec_input.name
+        shape = rec_input.shape
+        self.rec_channels = int(shape[1]) if len(shape) > 1 and isinstance(shape[1], int) and shape[1] > 0 else 1
+        self.ppocr_h = int(shape[2]) if len(shape) > 2 and isinstance(shape[2], int) and shape[2] > 0 else 48
 
     def __call__(self, image: str | Path | np.ndarray | Image.Image) -> list[Seal]:
         rgb = _to_rgb(image)
@@ -239,16 +252,26 @@ class RapidStamp:
     def _recognize(self, strip: np.ndarray) -> tuple[str, float]:
         return self._recognize_many([strip])[0]
 
+    def _fit_strip(self, strip: np.ndarray) -> np.ndarray:
+        if strip.shape[0] != self.rec_h or strip.shape[1] != self.rec_w:
+            return resize_bilinear(strip, self.rec_w, self.rec_h)
+        return strip
+
     def _recognize_many(self, strips: list[np.ndarray]) -> list[tuple[str, float]]:
         if not strips:
             return []
-        grays = []
-        for strip in strips:
-            if strip.shape[0] != self.rec_h or strip.shape[1] != self.rec_w:
-                strip = resize_bilinear(strip, self.rec_w, self.rec_h)
-            grays.append(to_gray01(strip).astype(np.float32))
-        batch = np.stack(grays, axis=0)[:, None]
-        logits = self.rec.run(None, {"image": batch})[0]
+        fitted = [self._fit_strip(strip) for strip in strips]
+        if self.rec_channels == 3:
+            batch = np.stack([ppocr_nchw(strip, self.ppocr_h) for strip in fitted], axis=0)
+        else:
+            batch = np.stack([to_gray01(strip).astype(np.float32) for strip in fitted], axis=0)[:, None]
+        outputs = self.rec.run(None, {self.rec_input_name: batch})
+        logits = outputs[0]
+        classes = len(self.charset) + 1
+        for output in outputs:
+            if getattr(output, "ndim", 0) >= 2 and int(output.shape[-1]) == classes:
+                logits = output
+                break
         return [ctc_greedy(row, self.charset) for row in logits]
 
 

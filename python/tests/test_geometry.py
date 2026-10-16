@@ -14,6 +14,21 @@ from rapidstamp.labels import (
 )
 
 
+def test_ppocr_tensor_is_bgr_centered():
+    from rapidstamp.rec_preproc import ppocr_nchw, ppocr_width
+
+    image = np.zeros((32, 64, 3), dtype=np.uint8)
+    image[..., 0] = 200
+    image[..., 1] = 10
+    image[..., 2] = 10
+    tensor = ppocr_nchw(image, height=48)
+    assert tensor.shape[1] == 48
+    assert tensor.shape[2] == ppocr_width(32, 64, 48)
+    # Channel 0 is blue (the small channel). Channel 2 is the original red.
+    assert tensor[0, 0, 0] < 0
+    assert tensor[2, 0, 0] > 0
+
+
 def test_constants_match_cpp_header():
     text = open("cpp/src/constants.h", encoding="utf-8").read()
     assert f"kDetSize = {DET_SIZE}" in text

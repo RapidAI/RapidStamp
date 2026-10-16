@@ -1,6 +1,8 @@
 # C/C++ SDK 与 Python 包
 
-推理只有两个 ONNX 模型：`seal_det.onnx`（印章实例检测）和 `seal_rec.onnx`（展开后的文字识别）。几何后处理（letterbox、极坐标展开、方章切格、NMS、CTC 贪心解码）在 SDK 里完成，不放进计算图，方便各平台共用同一对模型。
+推理用两个 ONNX：`seal_det.onnx`（印章实例检测）和 `seal_rec.onnx`（展开后的文字识别）。几何后处理（letterbox、极坐标展开、方章切格、NMS、CTC 贪心解码）在 SDK 里完成，不放进计算图，方便各平台共用同一对模型。
+
+识别器按 ONNX 输入自己分支，Python 和 C++ 同一套规则。1 通道是灰度 CTC，条带缩到 32×384，输入名一般是 `image`。3 通道是 PP-OCRv5 那种文档识别：先缩到高 48、宽按比例且不超过 3200，再转 BGR，做 `(x/255-0.5)/0.5`。输出取最后一维等于字表长度加 1 的那个张量，空白仍是 index 0。`RapidStamp(..., fast=True)` 改读同目录的 `seal_rec_fast.onnx` 和 `charset_fast.txt`，这是轻量 CTC 的快速模式。C API 不增加参数，调用方把要跑的识别模型和字表路径传进来即可。
 
 运行时数值合同在 `preprocess.txt`。Python 与 C++ 都读这个文件。默认值和 `cpp/src/constants.h`、`python/src/rapidstamp/labels.py` 一致。
 

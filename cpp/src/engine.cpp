@@ -121,7 +121,13 @@ struct rapidstamp_engine {
     int threads = 4;
     std::mutex mutex;
 
+    int rec_channels = 1;
+    int ppocr_h = 48;
+    std::string rec_input_name = "image";
+    std::string rec_output_name = "logits";
+
     std::pair<std::string, float> recognize(const RsImage& strip);
+    std::vector<std::pair<std::string, float>> recognize_many(const std::vector<RsImage>& strips);
     std::pair<std::string, float> read_layout(const RsImage& crop, const std::string& layout);
 };
 
@@ -232,35 +238,91 @@ std::pair<std::string, float> prefer_reading(const std::pair<std::string, float>
 }
 
 std::pair<std::string, float> rapidstamp_engine::recognize(const RsImage& strip_in) {
-    RsImage strip = strip_in;
-    if (strip.width != config.rec_w || strip.height != config.rec_h) {
-        strip = resize_bilinear(strip, config.rec_w, config.rec_h);
+    auto rows = recognize_many({strip_in});
+    if (rows.empty()) return {"", 0.f};
+    return rows[0];
+}
+
+std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(const std::vector<RsImage>& strips_in) {
+    std::vector<std::pair<std::string, float>> decoded;
+    if (strips_in.empty()) return decoded;
+    std::vector<RsImage> strips;
+    strips.reserve(strips_in.size());
+    for (const auto& strip : strips_in) {
+        if (strip.width != config.rec_w || strip.height != config.rec_h) {
+            strips.push_back(resize_bilinear(strip, config.rec_w, config.rec_h));
+        } else {
+            strips.push_back(strip);
+        }
     }
-    std::vector<float> gray;
-    gray01(strip, gray);
-    std::array<int64_t, 4> shape{1, 1, config.rec_h, config.rec_w};
+    const int batch = static_cast<int>(strips.size());
+    std::vector<float> input;
+    std::array<int64_t, 4> shape{batch, 1, config.rec_h, config.rec_w};
+    if (rec_channels == 3) {
+        // Same rounding as python rapidstamp.rec_preproc.ppocr_width.
+        int height = ppocr_h > 0 ? ppocr_h : 48;
+        int width = static_cast<int>(std::lround(static_cast<double>(height) * config.rec_w / std::max(1, config.rec_h)));
+        width = std::max(8, std::min(3200, width));
+        shape = std::array<int64_t, 4>{batch, 3, height, width};
+        input.assign(static_cast<size_t>(batch) * 3 * height * width, 0.f);
+        const size_t plane = static_cast<size_t>(height) * width;
+        for (int index = 0; index < batch; ++index) {
+            RsImage page = resize_bilinear(strips[index], width, height);
+            float* base = input.data() + static_cast<size_t>(index) * 3 * plane;
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    const uint8_t* pixel = page.pixel(x, y);
+                    size_t offset = static_cast<size_t>(y) * width + x;
+                    float blue = (static_cast<float>(pixel[2]) / 255.f - 0.5f) / 0.5f;
+                    float green = (static_cast<float>(pixel[1]) / 255.f - 0.5f) / 0.5f;
+                    float red = (static_cast<float>(pixel[0]) / 255.f - 0.5f) / 0.5f;
+                    base[offset] = blue;
+                    base[plane + offset] = green;
+                    base[2 * plane + offset] = red;
+                }
+            }
+        }
+    } else {
+        const int height = config.rec_h;
+        const int width = config.rec_w;
+        input.assign(static_cast<size_t>(batch) * height * width, 0.f);
+        for (int index = 0; index < batch; ++index) {
+            std::vector<float> gray;
+            gray01(strips[index], gray);
+            std::copy(gray.begin(), gray.end(), input.begin() + static_cast<size_t>(index) * gray.size());
+        }
+    }
     Ort::MemoryInfo memory = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    Ort::Value input = Ort::Value::CreateTensor<float>(memory, gray.data(), gray.size(), shape.data(), shape.size());
-    const char* in_names[] = {"image"};
-    const char* out_names[] = {"logits"};
-    auto outputs = rec->Run(Ort::RunOptions{nullptr}, in_names, &input, 1, out_names, 1);
-    auto info = outputs[0].GetTensorTypeAndShapeInfo();
-    auto dims = info.GetShape();
-    int time_steps = static_cast<int>(dims.size() == 3 ? dims[1] : dims[0]);
+    Ort::Value tensor = Ort::Value::CreateTensor<float>(memory, input.data(), input.size(), shape.data(), shape.size());
+    const char* in_names[] = {rec_input_name.c_str()};
+    const char* out_names[] = {rec_output_name.c_str()};
+    auto outputs = rec->Run(Ort::RunOptions{nullptr}, in_names, &tensor, 1, out_names, 1);
+    auto dims = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
+    int time_steps = static_cast<int>(dims.size() >= 2 ? dims[dims.size() - 2] : dims[0]);
     int nclass = static_cast<int>(dims.back());
     const float* logits = outputs[0].GetTensorData<float>();
-    return ctc_greedy(logits, time_steps, nclass, charset);
+    decoded.reserve(strips.size());
+    for (int index = 0; index < batch; ++index) {
+        const float* row = logits + static_cast<size_t>(index) * time_steps * nclass;
+        decoded.push_back(ctc_greedy(row, time_steps, nclass, charset));
+    }
+    return decoded;
 }
 
 std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop, const std::string& layout) {
     if (layout == "hline") return recognize(hline_band(crop, config.rec_h, config.rec_w));
     if (layout == "grid") {
-        std::pair<std::string, float> best{"", -1.f};
         const int grids[4][2] = {{2, 1}, {3, 1}, {4, 1}, {2, 2}};
+        std::vector<RsImage> strips;
+        strips.reserve(4);
         for (const auto& item : grids) {
-            auto decoded = recognize(grid_unroll(crop, item[0], item[1], config.rec_h, config.rec_w));
-            float penalty = 0.05f * std::abs(utf8_len(decoded.first) - item[0] * item[1]);
-            best = prefer_reading(best, {decoded.first, decoded.second - penalty});
+            strips.push_back(grid_unroll(crop, item[0], item[1], config.rec_h, config.rec_w));
+        }
+        auto decoded = recognize_many(strips);
+        std::pair<std::string, float> best{"", -1.f};
+        for (size_t index = 0; index < decoded.size(); ++index) {
+            float penalty = 0.05f * std::abs(utf8_len(decoded[index].first) - grids[index][0] * grids[index][1]);
+            best = prefer_reading(best, {decoded[index].first, decoded[index].second - penalty});
         }
         return best;
     }
@@ -285,12 +347,15 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
     float guess = 0.f;
     float gap = 0.f;
     if (estimate_ring_start(source, config.r_in, config.r_out, guess, gap) && gap >= 40.f) push_unique(guess);
-    std::pair<std::string, float> best{"", -1.f};
+    std::vector<RsImage> strips;
+    strips.reserve(starts.size());
     for (float start : starts) {
-        auto decoded = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
-                                              config.span_deg));
-        best = prefer_reading(best, decoded);
+        strips.push_back(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
+                                      config.span_deg));
     }
+    auto decoded = recognize_many(strips);
+    std::pair<std::string, float> best{"", -1.f};
+    for (const auto& item : decoded) best = prefer_reading(best, item);
     return best;
 }
 
@@ -336,6 +401,24 @@ rapidstamp_engine* rapidstamp_create(const char* det_model_path, const char* rec
         engine->det = std::make_unique<Ort::Session>(engine->env, det_model_path, options);
         engine->rec = std::make_unique<Ort::Session>(engine->env, rec_model_path, options);
 #endif
+        Ort::AllocatorWithDefaultOptions allocator;
+        engine->rec_input_name = engine->rec->GetInputNameAllocated(0, allocator).get();
+        auto in_shape = engine->rec->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+        if (in_shape.size() >= 2 && in_shape[1] > 0) engine->rec_channels = static_cast<int>(in_shape[1]);
+        if (in_shape.size() >= 3 && in_shape[2] > 0) engine->ppocr_h = static_cast<int>(in_shape[2]);
+        int output_index = 0;
+        int output_rank = -1;
+        const int wanted = static_cast<int>(engine->charset.size()) + 1;
+        for (size_t index = 0; index < engine->rec->GetOutputCount(); ++index) {
+            auto out_shape = engine->rec->GetOutputTypeInfo(index).GetTensorTypeAndShapeInfo().GetShape();
+            int last = out_shape.empty() ? 0 : static_cast<int>(out_shape.back());
+            int rank = last == wanted ? 2 : (index == 0 ? 1 : 0);
+            if (rank > output_rank) {
+                output_rank = rank;
+                output_index = static_cast<int>(index);
+            }
+        }
+        engine->rec_output_name = engine->rec->GetOutputNameAllocated(output_index, allocator).get();
         g_error.clear();
         return engine;
     } catch (const std::exception& ex) {
