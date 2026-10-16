@@ -105,6 +105,22 @@
       "ms_per_image": 268.15212769221176
     }
   },
+  "user_seals_test": {
+    "images": 63,
+    "gt_seals": 63,
+    "train_images": 156,
+    "duplicate_images": 10,
+    "split": "capture-group sha256 prefix mod 10 < 3; exact copies not written twice; not mixed into the 52-page web test",
+    "class": "round_official",
+    "text_status": "unverified",
+    "precision50": 0.0,
+    "recall50": 0.0,
+    "det_map50": 0.0,
+    "predictions": 2,
+    "text_n": 0,
+    "ms_per_image": 24.343579127046738,
+    "score_0.05_iou50_hits": 0
+  },
   "rejected_name_rec": {
     "published": false,
     "reason": "paddle title fell and square strips stayed 0/137",
