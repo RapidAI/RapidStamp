@@ -53,6 +53,6 @@ python training/scripts/train_ring_rec.py \
     --charset models/charset.txt
 ```
 
-`train_ring_rec.py` 见到已经准备好的 `--paddle` 目录时会把它并进同一轮识别训练。
+`train_ring_rec.py` 见到已经准备好的 `--paddle` 目录时会把它并进同一轮识别训练。2026-10-16 这次重训时 zip 还不在，混合集是合成条带、4 倍 ReST 和自由环文。指标见 `models/metrics.json`。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。

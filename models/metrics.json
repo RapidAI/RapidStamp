@@ -12,49 +12,55 @@
     "rect_stamp": 0.9726529457263844
   },
   "det_recall50": 0.9987138263665595,
-  "e2e_title_recall": 0.19356913183279742,
+  "e2e_title_recall": 0.41286173633440515,
   "e2e_per_class": {
-    "company_latin": 0.25984251968503935,
-    "finance": 0.0,
-    "invoice": 0.21238938053097345,
-    "notary": 0.5575221238938053,
-    "oval": 0.0311284046692607,
-    "rect_stamp": 0.8654970760233918,
-    "round_official": 0.002457002457002457,
+    "company_latin": 0.8110236220472441,
+    "finance": 0.452991452991453,
+    "invoice": 0.6017699115044248,
+    "notary": 0.6637168141592921,
+    "oval": 0.20622568093385213,
+    "rect_stamp": 0.8362573099415205,
+    "round_official": 0.1941031941031941,
     "square_personal": 0.0
   },
   "e2e_by_source": {
     "rest": {
-      "e2e_title_recall": 0.1090146750524109,
+      "e2e_title_recall": 0.19916142557651992,
       "det_recall50": 1.0,
       "n": 477
     },
     "synth": {
-      "e2e_title_recall": 0.23098330241187384,
+      "e2e_title_recall": 0.5074211502782932,
       "det_recall50": 0.9981447124304267,
       "n": 1078
     }
   },
-  "invoice_center_exact": 0.08130081300813008,
+  "invoice_center_exact": 0.0975609756097561,
   "invoice_center_n": 123,
   "rec_strips": {
     "seal": {
-      "exact": 0.31382636655948554,
+      "exact": 0.6360128617363344,
       "n": 1555
     },
     "center": {
-      "exact": 1.0,
+      "exact": 0.983739837398374,
       "n": 123
     },
     "plain": {
       "exact": 0.0,
       "n": 0
+    },
+    "by_prefix": {
+      "rest": {
+        "exact": 0.24737945492662475,
+        "n": 477
+      },
+      "synth": {
+        "exact": 0.8079777365491652,
+        "n": 1078
+      }
     }
   },
-  "ms_per_image": 199.95350646749927,
-  "gt_seals": 1555,
-  "det_params": 453197,
-  "rec_params": 1934114,
-  "rec_classes_including_blank": 1922,
-  "note": "Mixed hold-out after fine-tuning. synth = synthetic pages. rest = 10% of labeled ReST train ids pasted onto synthetic pages, not the official unlabeled test split. The Paddle seal zip was not on disk for this run."
+  "ms_per_image": 453.931492436968,
+  "gt_seals": 1555
 }
