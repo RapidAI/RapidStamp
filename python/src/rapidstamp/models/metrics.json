@@ -1,0 +1,24 @@
+{
+  "detector": {
+    "precision": 0.7407407407407407,
+    "recall": 0.75,
+    "mean_iou": 0.6595768299690017,
+    "tp": 60,
+    "fp": 21,
+    "fn": 20
+  },
+  "detector_params": 7253,
+  "recognizer_exact": 0.9166666666666666,
+  "recognizer_char": 0.986013986013986,
+  "recognizer_params": 21267,
+  "e2e_exact": 0.90625,
+  "e2e_detection": 1.0,
+  "latency_ms_numpy": 25.09423850000303,
+  "det_thresh": 0.7,
+  "det_bytes": 28485,
+  "rec_bytes": 102101,
+  "det_onnx_bytes": 31467,
+  "rec_onnx_bytes": 86791,
+  "decode": "lexicon",
+  "ring_refine": true
+}

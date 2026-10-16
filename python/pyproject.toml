@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rapidstamp"
+version = "0.1.0"
+description = "Small CPU seal detection and recognition"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "RapidStamp Contributors"}]
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.16"]
+train = ["torch>=2.2", "pillow>=10", "onnx>=1.16", "onnxruntime>=1.16"]
+dev = ["pytest>=7", "pillow>=10"]
+
+[project.scripts]
+rapidstamp = "rapidstamp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rapidstamp = ["models/*"]
+
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-*"
+skip = "pp* *-musllinux_*"
+test-command = "python -c \"import rapidstamp; assert rapidstamp.__version__\""
