@@ -366,6 +366,7 @@ def link_mix(
     dst: Path,
     rec_repeat: dict[str, int] | None = None,
     base_charset: Path | None = None,
+    det_repeat: dict[str, int] | None = None,
 ) -> dict:
     """Symlink prepared roots into one detection/recognition tree and union the charset.
 
@@ -382,6 +383,7 @@ def link_mix(
         charset = list(all_chars())
     seen = set(charset)
     repeats = rec_repeat or {}
+    det_repeats = det_repeat or {}
     for prefix, root in sources:
         root = Path(root)
         if not root.is_dir():
@@ -394,10 +396,13 @@ def link_mix(
                     image = image_dir / f"{label.stem}.jpg"
                     if not image.is_file():
                         continue
-                    out_stem = f"{prefix}{label.stem}"
-                    _symlink(image, dst / "det" / split / "images" / f"{out_stem}.jpg")
-                    _symlink(label, dst / "det" / split / "labels" / f"{out_stem}.json")
-                    counts[f"det_{split}"] += 1
+                    copies = max(1, int(det_repeats.get(prefix, 1))) if split == "train" else 1
+                    for copy in range(copies):
+                        suffix = "" if copy == 0 else f"__{copy}"
+                        out_stem = f"{prefix}{label.stem}{suffix}"
+                        _symlink(image, dst / "det" / split / "images" / f"{out_stem}.jpg")
+                        _symlink(label, dst / "det" / split / "labels" / f"{out_stem}.json")
+                        counts[f"det_{split}"] += 1
             tsv = root / "rec" / split / "labels.tsv"
             rec_root = root / "rec" / split / "images"
             if tsv.is_file():

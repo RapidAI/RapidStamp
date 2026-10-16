@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--free", type=Path, default=None)
     parser.add_argument("--paddle", type=Path, default=None)
     parser.add_argument("--grids", type=Path, default=None)
+    parser.add_argument("--focus", type=Path, default=None, help="Minority-class strips (square, finance, invoice, latin, notary)")
     parser.add_argument("--charset", type=Path, default=ROOT / "models" / "charset.txt")
     parser.add_argument("--mix", type=Path, default=Path("/home/mayong/rapidstamp/mix_ring"))
     parser.add_argument("--out", type=Path, default=Path("/home/mayong/rapidstamp/checkpoints/ringrec"))
@@ -44,7 +45,9 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--rest-repeat", type=int, default=4)
-    parser.add_argument("--paddle-repeat", type=int, default=2)
+    parser.add_argument("--paddle-repeat", type=int, default=1)
+    parser.add_argument("--grid-repeat", type=int, default=4)
+    parser.add_argument("--focus-repeat", type=int, default=3)
     parser.add_argument("--init-rec", type=Path, default=None)
     args = parser.parse_args()
 
@@ -68,6 +71,12 @@ def main() -> None:
         if not args.grids.is_dir():
             raise SystemExit(f"missing free-grid tree: {args.grids}")
         sources.append(("grid_", args.grids))
+        repeats["grid_"] = args.grid_repeat
+    if args.focus:
+        if not args.focus.is_dir():
+            raise SystemExit(f"missing focus-strip tree: {args.focus}")
+        sources.append(("focus_", args.focus))
+        repeats["focus_"] = args.focus_repeat
     link_mix(sources, args.mix, rec_repeat=repeats, base_charset=args.charset)
     train_rec(
         argparse.Namespace(

@@ -255,6 +255,59 @@ std::vector<RsDet> decode_detections(const float* pred, int cells, int num_class
     return kept;
 }
 
+bool estimate_ring_start(const RsImage& src, float r_in, float r_out, float& start_deg, float& gap_deg) {
+    // Same 96×96 histogram as python rapidstamp.geometry.estimate_ring_start.
+    RsImage small = resize_bilinear(src, 96, 96);
+    constexpr int kBins = 72;
+    int counts[kBins] = {};
+    int ink_n = 0;
+    const double cx = (small.width - 1) / 2.0;
+    const double cy = (small.height - 1) / 2.0;
+    for (int y = 0; y < small.height; ++y) {
+        for (int x = 0; x < small.width; ++x) {
+            double dx = (static_cast<double>(x) - cx) / std::max(cx, 1e-6);
+            double dy = (static_cast<double>(y) - cy) / std::max(cy, 1e-6);
+            double radius = std::sqrt(dx * dx + dy * dy);
+            if (radius < r_in || radius > r_out + 0.02) continue;
+            const uint8_t* px = small.pixel(x, y);
+            int red = px[0];
+            int green = small.channels > 1 ? px[1] : px[0];
+            int blue = small.channels > 2 ? px[2] : px[0];
+            bool ink = (red > 120 && red > green + 30 && red > blue + 30) ||
+                       (blue > 100 && blue > red + 20 && blue > green + 10) || (red < 85 && green < 85 && blue < 85);
+            if (!ink) continue;
+            double angle = std::atan2(dy, dx) * 180.0 / 3.14159265358979323846;
+            if (angle < 0) angle += 360.0;
+            int bin = static_cast<int>(angle / 360.0 * kBins);
+            if (bin < 0) bin = 0;
+            if (bin >= kBins) bin = kBins - 1;
+            counts[bin] += 1;
+            ink_n += 1;
+        }
+    }
+    gap_deg = 0.f;
+    if (ink_n < 25) return false;
+    int best = 0;
+    int best_end = 0;
+    int run = 0;
+    for (int index = 0; index < kBins * 2; ++index) {
+        if (counts[index % kBins] == 0) {
+            run += 1;
+            if (run > best && run <= kBins) {
+                best = run;
+                best_end = index;
+            }
+        } else {
+            run = 0;
+        }
+    }
+    gap_deg = static_cast<float>(best * (360.0 / kBins));
+    if (best < 8) return false;
+    int start_bin = (best_end + 1) % kBins;
+    start_deg = static_cast<float>(start_bin * (360.0 / kBins));
+    return true;
+}
+
 bool load_key_values(const std::string& path, std::vector<std::pair<std::string, std::string>>& out) {
     std::ifstream input(path);
     if (!input) return false;

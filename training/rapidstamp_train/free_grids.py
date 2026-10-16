@@ -35,7 +35,8 @@ _FONTS: FontBank | None = None
 
 
 def sample_grid(rng: np.random.Generator, cjk: list[str]) -> tuple[str, int, int]:
-    if rng.random() < 0.2:
+    # Closed names stay a small share so the decoder does not collapse onto them.
+    if rng.random() < 0.05:
         return personal_name(rng)
     rows, cols = _LAYOUTS[int(rng.integers(0, len(_LAYOUTS)))]
     count = rows * cols

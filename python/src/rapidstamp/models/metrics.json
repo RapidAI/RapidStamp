@@ -1,41 +1,41 @@
 {
   "images": 1277,
-  "det_map50": 0.798435820059808,
+  "det_map50": 0.804079724900556,
   "det_per_class_ap50": {
-    "round_official": 0.9695509006789322,
-    "oval": 0.7031733941127849,
+    "round_official": 0.9671322890025138,
+    "oval": 0.6642387133072538,
     "square_personal": 1.0,
-    "finance": 0.5913408426214938,
-    "invoice": 0.9507103515923188,
-    "company_latin": 0.6168227131951951,
-    "notary": 0.5832354125513544,
-    "rect_stamp": 0.9726529457263844
+    "finance": 0.6210768004388189,
+    "invoice": 0.953191439913935,
+    "company_latin": 0.6485537929204395,
+    "notary": 0.5959270685743276,
+    "rect_stamp": 0.982517695047159
   },
-  "det_recall50": 0.9987138263665595,
-  "e2e_title_recall": 0.4270096463022508,
+  "det_recall50": 0.9967845659163987,
+  "e2e_title_recall": 0.5131832797427652,
   "e2e_per_class": {
-    "company_latin": 0.7559055118110236,
-    "finance": 0.37606837606837606,
-    "invoice": 0.6150442477876106,
-    "notary": 0.7345132743362832,
-    "oval": 0.22568093385214008,
+    "company_latin": 0.8976377952755905,
+    "finance": 0.5470085470085471,
+    "invoice": 0.7566371681415929,
+    "notary": 0.7787610619469026,
+    "oval": 0.3151750972762646,
     "rect_stamp": 0.8304093567251462,
-    "round_official": 0.25061425061425063,
+    "round_official": 0.33906633906633904,
     "square_personal": 0.0
   },
   "e2e_by_source": {
     "rest": {
-      "e2e_title_recall": 0.21174004192872117,
-      "det_recall50": 1.0,
+      "e2e_title_recall": 0.21593291404612158,
+      "det_recall50": 0.9916142557651991,
       "n": 477
     },
     "synth": {
-      "e2e_title_recall": 0.5222634508348795,
-      "det_recall50": 0.9981447124304267,
+      "e2e_title_recall": 0.6447124304267161,
+      "det_recall50": 0.9990723562152134,
       "n": 1078
     }
   },
-  "invoice_center_exact": 0.04065040650406504,
+  "invoice_center_exact": 0.08943089430894309,
   "invoice_center_n": 123,
   "rec_strips": {
     "seal": {
@@ -61,7 +61,7 @@
       }
     }
   },
-  "ms_per_image": 728.5398696985225,
+  "ms_per_image": 217.21481533987102,
   "gt_seals": 1555,
   "free_ring_val_exact": 0.9062,
   "free_ring_val_n": 800,
@@ -76,5 +76,24 @@
   "synth_round_strip_exact": 0.7643979057591623,
   "synth_round_strip_n": 191,
   "rec_params": 6169425,
-  "rec_classes": 2817
+  "rec_classes": 2817,
+  "real_web_test": {
+    "images": 52,
+    "gt_seals": 58,
+    "split": "sha256 prefix mod 10 < 3, collages excluded from test",
+    "before": {
+      "precision50": 0.023668639053254437,
+      "recall50": 0.3448275862068966,
+      "det_map50": 0.07628067739337119,
+      "predictions": 845,
+      "ms_per_image": 2192.1300481923163
+    },
+    "after": {
+      "precision50": 0.03278688524590164,
+      "recall50": 0.3793103448275862,
+      "det_map50": 0.03235034393891217,
+      "predictions": 671,
+      "ms_per_image": 1577.2765494229343
+    }
+  }
 }

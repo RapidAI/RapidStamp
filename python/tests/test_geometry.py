@@ -1,6 +1,6 @@
 import numpy as np
 
-from rapidstamp.geometry import polar_unwrap
+from rapidstamp.geometry import estimate_ring_start, polar_unwrap
 from rapidstamp.labels import (
     ANGLE_STEPS,
     DET_SIZE,
@@ -25,6 +25,21 @@ def test_constants_match_cpp_header():
     assert str(UNWRAP_R_IN) in text
     assert str(UNWRAP_R_OUT) in text
     assert str(int(UNWRAP_SPAN_DEG)) in text
+
+
+def test_ring_gap_starts_at_the_clockwise_end():
+    image = np.full((180, 180, 3), 245, dtype=np.uint8)
+    cx = cy = 89.5
+    radius = 80.0
+    for deg in range(180, 350):
+        rad = np.deg2rad(deg)
+        x = int(round(cx + radius * np.cos(rad)))
+        y = int(round(cy + radius * np.sin(rad)))
+        image[y - 1 : y + 2, x - 1 : x + 2] = (190, 30, 30)
+    start, gap = estimate_ring_start(image)
+    assert start is not None
+    assert gap >= 40.0
+    assert abs(start - 180.0) <= 10.0
 
 
 def test_top_mark_lands_on_expected_column():

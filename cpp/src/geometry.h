@@ -38,6 +38,8 @@ RsImage polar_unwrap(const RsImage& src, int out_w, int out_h, float r_in, float
                      float span_deg);
 RsImage grid_unroll(const RsImage& src, int rows, int cols, int out_h, int out_w);
 RsImage hline_band(const RsImage& src, int out_h, int out_w);
+// Largest ink gap on the ring. False when the gap is under 40 degrees.
+bool estimate_ring_start(const RsImage& src, float r_in, float r_out, float& start_deg, float& gap_deg);
 
 void gray01(const RsImage& src, std::vector<float>& dst);
 

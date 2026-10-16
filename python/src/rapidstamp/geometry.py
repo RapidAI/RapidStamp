@@ -279,3 +279,61 @@ def decode_detections(
     exp = np.exp(logits)
     classes = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-6)
     return boxes.astype(np.float32), obj.astype(np.float32), classes.astype(np.float32)
+
+
+def estimate_ring_start(
+    image: np.ndarray,
+    r_in: float = UNWRAP_R_IN,
+    r_out: float = UNWRAP_R_OUT,
+    bins: int = 72,
+) -> tuple[float | None, float]:
+    """Clockwise start of a ring title, from the largest ink gap.
+
+    The seal is resized to 96×96 so Python and C++ see the same samples.
+    Returns ``(start_deg, gap_deg)``. ``start_deg`` is ``None`` when the gap
+    is under 40°, which is too small to trust over a coarse search.
+    ``start_deg`` is the clockwise end of that gap (the first ink after it),
+    in the same angle system as polar unwrap.
+    """
+    small = resize_bilinear(image, 96, 96)
+    if small.ndim == 2:
+        small = np.repeat(small[..., None], 3, axis=2)
+    height, width = small.shape[:2]
+    yy, xx = np.mgrid[0:height, 0:width]
+    cx = (width - 1) / 2.0
+    cy = (height - 1) / 2.0
+    dx = (xx - cx) / max(cx, 1e-6)
+    dy = (yy - cy) / max(cy, 1e-6)
+    radius = np.sqrt(dx * dx + dy * dy)
+    angle = np.degrees(np.arctan2(dy, dx)) % 360.0
+    red = small[..., 0].astype(np.int16)
+    green = small[..., 1].astype(np.int16)
+    blue = small[..., 2].astype(np.int16)
+    ink = (red > 120) & (red > green + 30) & (red > blue + 30)
+    ink |= (blue > 100) & (blue > red + 20) & (blue > green + 10)
+    ink |= (red < 85) & (green < 85) & (blue < 85)
+    ink &= (radius >= r_in) & (radius <= r_out + 0.02)
+    if int(ink.sum()) < 25:
+        return None, 0.0
+    bin_id = np.clip((angle[ink] / 360.0 * bins).astype(np.int32), 0, bins - 1)
+    counts = np.bincount(bin_id, minlength=bins)
+    empty = counts == 0
+    if bool(empty.all()):
+        return None, 0.0
+    doubled = np.concatenate([empty, empty])
+    best = 0
+    best_end = 0
+    run = 0
+    for index, flag in enumerate(doubled.tolist()):
+        if flag:
+            run += 1
+            if best < run <= bins:
+                best = run
+                best_end = index
+        else:
+            run = 0
+    gap = best * (360.0 / bins)
+    if best < 8:
+        return None, float(gap)
+    start_bin = (best_end + 1) % bins
+    return float(start_bin * (360.0 / bins)), float(gap)

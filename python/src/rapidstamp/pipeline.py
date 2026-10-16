@@ -12,6 +12,7 @@ from PIL import Image
 from rapidstamp.ctc import ctc_greedy, prefer_reading
 from rapidstamp.geometry import (
     decode_detections,
+    estimate_ring_start,
     grid_unroll,
     hline_band,
     letterbox,
@@ -171,45 +172,46 @@ class RapidStamp:
         if layout == "hline":
             return self._recognize(hline_band(crop, self.rec_h, self.rec_w))
         if layout == "grid":
+            strips = [grid_unroll(crop, rows, cols, self.rec_h, self.rec_w) for rows, cols in _GRID_CANDIDATES]
+            decoded = self._recognize_many(strips)
             best = ("", -1.0)
-            for rows, cols in _GRID_CANDIDATES:
-                text, score = self._recognize(grid_unroll(crop, rows, cols, self.rec_h, self.rec_w))
-                if score > best[1]:
-                    best = (text, score)
+            for (rows, cols), (text, score) in zip(_GRID_CANDIDATES, decoded):
+                # A layout that emits one glyph per cell beats a shorter fragment.
+                penalty = 0.05 * abs(len(text) - rows * cols)
+                best = prefer_reading(best, (text, score - penalty))
             return best
         return self._read_arc(crop, square=layout == "circle")
 
-    def _read_arc(self, crop: np.ndarray, square: bool) -> tuple[str, float]:
-        source = pad_to_square(crop, 255) if square else crop
-        steps = max(1, self.angle_steps)
-        readings: list[tuple[float, str, float]] = []
-        for step in range(steps):
-            start = step * (360.0 / steps)
-            text, score = self._recognize(self._unwrap(source, start, self.r_in, self.r_out))
-            readings.append((start, text, score))
-        # The training distribution is left-aligned near this start. Always try it.
-        text, score = self._recognize(self._unwrap(source, self.start_deg, self.r_in, self.r_out))
-        readings.append((self.start_deg, text, score))
-        # The 15 degree grid often sits a few degrees off a perfect title. Refine
-        # the two strongest angles, then break near-ties toward the full title.
-        ranked = sorted(readings, key=lambda item: item[2], reverse=True)
-        refined = 0
+    def _arc_starts(self, source: np.ndarray) -> list[float]:
+        """Eight unwraps, 45° apart.
+
+        A 15° grid adds rotated fragments that outscore the real title. The
+        coarser grid keeps that fragment out of the candidate set, and one
+        batched recognition stays inside the CPU budget.
+        """
+        steps = 8 if int(self.angle_steps) >= 8 else max(1, int(self.angle_steps))
+        starts = [step * (360.0 / steps) for step in range(steps)]
+        starts.append(float(self.start_deg) % 360.0)
+        guess, gap = estimate_ring_start(source, self.r_in, self.r_out)
+        if guess is not None and gap >= 40.0:
+            starts.append(float(guess) % 360.0)
+        unique: list[float] = []
         seen: set[int] = set()
-        for start, _, _ in ranked:
+        for start in starts:
             key = int(round(start)) % 360
             if key in seen:
                 continue
             seen.add(key)
-            refined += 1
-            if refined > 2:
-                break
-            for delta in range(-12, 13, 3):
-                if delta == 0:
-                    continue
-                text, score = self._recognize(self._unwrap(source, start + delta, self.r_in, self.r_out))
-                readings.append((start + delta, text, score))
+            unique.append(start)
+        return unique
+
+    def _read_arc(self, crop: np.ndarray, square: bool) -> tuple[str, float]:
+        source = pad_to_square(crop, 255) if square else crop
+        starts = self._arc_starts(source)
+        strips = [self._unwrap(source, start, self.r_in, self.r_out) for start in starts]
+        decoded = self._recognize_many(strips)
         best = ("", -1.0)
-        for _, text, score in readings:
+        for text, score in decoded:
             best = prefer_reading(best, (text, score))
         return best
 
@@ -235,11 +237,19 @@ class RapidStamp:
         return "", 0.0
 
     def _recognize(self, strip: np.ndarray) -> tuple[str, float]:
-        if strip.shape[0] != self.rec_h or strip.shape[1] != self.rec_w:
-            strip = resize_bilinear(strip, self.rec_w, self.rec_h)
-        gray = to_gray01(strip).astype(np.float32)[None, None]
-        logits = self.rec.run(None, {"image": gray})[0]
-        return ctc_greedy(logits, self.charset)
+        return self._recognize_many([strip])[0]
+
+    def _recognize_many(self, strips: list[np.ndarray]) -> list[tuple[str, float]]:
+        if not strips:
+            return []
+        grays = []
+        for strip in strips:
+            if strip.shape[0] != self.rec_h or strip.shape[1] != self.rec_w:
+                strip = resize_bilinear(strip, self.rec_w, self.rec_h)
+            grays.append(to_gray01(strip).astype(np.float32))
+        batch = np.stack(grays, axis=0)[:, None]
+        logits = self.rec.run(None, {"image": batch})[0]
+        return [ctc_greedy(row, self.charset) for row in logits]
 
 
 def _read_lines(path: Path) -> list[str]:

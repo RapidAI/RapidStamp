@@ -259,43 +259,38 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
         const int grids[4][2] = {{2, 1}, {3, 1}, {4, 1}, {2, 2}};
         for (const auto& item : grids) {
             auto decoded = recognize(grid_unroll(crop, item[0], item[1], config.rec_h, config.rec_w));
-            if (decoded.second > best.second) best = decoded;
+            float penalty = 0.05f * std::abs(utf8_len(decoded.first) - item[0] * item[1]);
+            best = prefer_reading(best, {decoded.first, decoded.second - penalty});
         }
         return best;
     }
     RsImage source = layout == "circle" ? pad_to_square(crop, 255) : crop;
-    struct Reading {
-        float start;
-        std::string text;
-        float score;
+    std::vector<float> starts;
+    auto push_unique = [&](float start) {
+        float wrapped = std::fmod(start, 360.f);
+        if (wrapped < 0.f) wrapped += 360.f;
+        int key = static_cast<int>(std::lround(wrapped)) % 360;
+        if (key < 0) key += 360;
+        for (float existing : starts) {
+            int other = static_cast<int>(std::lround(existing)) % 360;
+            if (other < 0) other += 360;
+            if (other == key) return;
+        }
+        starts.push_back(wrapped);
     };
-    std::vector<Reading> readings;
-    int steps = std::max(1, config.angle_steps);
-    auto push = [&](float start) {
+    // Eight starts. A 15 degree grid lets a rotated fragment outscore the title.
+    int steps = config.angle_steps >= 8 ? 8 : std::max(1, config.angle_steps);
+    for (int step = 0; step < steps; ++step) push_unique(step * (360.f / static_cast<float>(steps)));
+    push_unique(config.start_deg);
+    float guess = 0.f;
+    float gap = 0.f;
+    if (estimate_ring_start(source, config.r_in, config.r_out, guess, gap) && gap >= 40.f) push_unique(guess);
+    std::pair<std::string, float> best{"", -1.f};
+    for (float start : starts) {
         auto decoded = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
                                               config.span_deg));
-        readings.push_back(Reading{start, decoded.first, decoded.second});
-    };
-    for (int step = 0; step < steps; ++step) push(step * (360.f / static_cast<float>(steps)));
-    push(config.start_deg);
-    std::vector<Reading> ranked = readings;
-    std::sort(ranked.begin(), ranked.end(), [](const Reading& a, const Reading& b) { return a.score > b.score; });
-    int refined = 0;
-    std::vector<int> seen;
-    for (const Reading& item : ranked) {
-        int key = static_cast<int>(std::lround(item.start)) % 360;
-        if (key < 0) key += 360;
-        if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
-        seen.push_back(key);
-        refined += 1;
-        if (refined > 2) break;
-        for (int delta = -12; delta <= 12; delta += 3) {
-            if (delta == 0) continue;
-            push(item.start + static_cast<float>(delta));
-        }
+        best = prefer_reading(best, decoded);
     }
-    std::pair<std::string, float> best{"", -1.f};
-    for (const Reading& item : readings) best = prefer_reading(best, {item.text, item.score});
     return best;
 }
 
