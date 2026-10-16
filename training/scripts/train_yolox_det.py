@@ -49,14 +49,20 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--web-repeat", type=int, default=4)
     parser.add_argument("--distractors", type=int, default=4000)
+    parser.add_argument("--user-pages", type=Path, default=None)
+    parser.add_argument("--finetune", type=Path, default=None)
     args = parser.parse_args()
-    _ensure(args.coco)
+    init = args.finetune if args.finetune else args.coco
+    if args.finetune is None:
+        _ensure(args.coco)
     sources = [("synth_", args.synth), ("rest_", args.rest)]
     if args.paddle.is_dir():
         sources.append(("paddle_", args.paddle))
     if args.web.is_dir():
         sources.append(("web_", args.web))
-    link_mix(sources, args.mix, det_repeat={"web_": args.web_repeat})
+    if args.user_pages and args.user_pages.is_dir():
+        sources.append(("user_", args.user_pages))
+    link_mix(sources, args.mix, det_repeat={"web_": args.web_repeat, "user_": 2})
     train_det(
         argparse.Namespace(
             data=args.mix,
@@ -66,7 +72,7 @@ def main() -> None:
             lr=args.lr,
             workers=args.workers,
             device="cuda",
-            init=args.coco,
+            init=init,
             distractors=args.distractors,
         )
     )

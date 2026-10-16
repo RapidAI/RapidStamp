@@ -1,6 +1,7 @@
 import numpy as np
 
-from rapidstamp_train.user_seals import annotate, assign_splits, seal_class, ink_mask, seal_box
+from rapidstamp_train.data import crop_seal_large
+from rapidstamp_train.user_seals import PASTE_SCALES, annotate, assign_splits, pasted_page, seal_class, ink_mask, seal_box
 
 
 def _ring() -> np.ndarray:
@@ -36,6 +37,28 @@ def test_square_frame_is_not_called_round():
     box = seal_box(ink_mask(image))
     assert box is not None
     assert seal_class(ink_mask(image), box) == "square_personal"
+
+
+def test_large_crop_makes_the_seal_fill_the_frame():
+    image = np.full((400, 400, 3), 240, np.uint8)
+    boxes = np.array([[160, 150, 230, 220]], dtype=np.float32)
+    classes = np.array([0], dtype=np.int64)
+    cropped, new_boxes, new_classes = crop_seal_large(image, boxes, classes, np.random.default_rng(0), frac=0.9)
+    assert new_classes.tolist() == [0]
+    box = new_boxes[0]
+    long = max(box[2] - box[0], box[3] - box[1])
+    assert long / max(cropped.shape[:2]) > 0.7
+    assert 0 <= box[0] < box[2] <= cropped.shape[1]
+    assert 0 <= box[1] < box[3] <= cropped.shape[0]
+
+
+def test_pasted_page_scales_the_seal():
+    crop = np.full((100, 80, 3), 200, np.uint8)
+    page, box = pasted_page(crop, [0, 0, 80, 100], PASTE_SCALES[-1], page=200, origin=(0, 0))
+    assert page.shape == (200, 200, 3)
+    long = max(box[2] - box[0], box[3] - box[1])
+    assert long >= int(0.9 * 200)
+    assert box[2] <= 200 and box[3] <= 200
 
 
 def test_split_keeps_captures_together_and_drops_copies():

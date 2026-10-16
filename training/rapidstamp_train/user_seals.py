@@ -203,6 +203,43 @@ def assign_splits(rows: list[dict]) -> None:
             row["split"] = "skipped" if not row.get("seals") else split
 
 
+# Long side of the pasted seal, as a fraction of the page. The last value
+# is the full-frame case the published detector misses.
+PASTE_SCALES = (0.22, 0.45, 0.72, 0.96)
+
+
+def pasted_page(
+    crop: np.ndarray,
+    box: list[int],
+    scale: float,
+    page: int = 640,
+    origin: tuple[int, int] | None = None,
+) -> tuple[np.ndarray, list[int]]:
+    """Paste the seal box onto a square page. ``scale`` is its long side / page."""
+    x1, y1, x2, y2 = (int(v) for v in box)
+    x1 = max(0, min(crop.shape[1] - 1, x1))
+    y1 = max(0, min(crop.shape[0] - 1, y1))
+    x2 = max(x1 + 1, min(crop.shape[1], x2))
+    y2 = max(y1 + 1, min(crop.shape[0], y2))
+    seal = np.ascontiguousarray(crop[y1:y2, x1:x2])
+    src_h, src_w = seal.shape[:2]
+    target = max(16, int(round(float(scale) * page)))
+    ratio = target / max(src_h, src_w, 1)
+    new_w = max(1, min(page, int(round(src_w * ratio))))
+    new_h = max(1, min(page, int(round(src_h * ratio))))
+    resized = np.asarray(Image.fromarray(seal).resize((new_w, new_h), Image.BILINEAR))
+    canvas = np.full((page, page, 3), 244, np.uint8)
+    if origin is None:
+        left = max(0, (page - new_w) // 2)
+        top = max(0, (page - new_h) // 2)
+    else:
+        left, top = origin
+        left = min(max(0, left), page - new_w)
+        top = min(max(0, top), page - new_h)
+    canvas[top : top + new_h, left : left + new_w] = resized
+    return canvas, [left, top, left + new_w, top + new_h]
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     digest.update(path.read_bytes())

@@ -15,6 +15,63 @@ from rapidstamp.labels import REC_H, REC_W
 from rapidstamp_train.distractors import blank_distractor_page, paint_distractors
 
 
+def crop_seal_large(
+    image: np.ndarray,
+    boxes: np.ndarray,
+    classes: np.ndarray,
+    rng: np.random.Generator,
+    frac: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Crop so one seal occupies most of the frame.
+
+    Published training pages keep stamps small, and the detector then splits a
+    seal that fills the photo into fragments. ``frac`` is the seal's long side
+    divided by the crop's long side. The default range is 0.62 to 0.98.
+    """
+    if len(boxes) == 0:
+        return image, boxes, classes
+    index = int(rng.integers(0, len(boxes)))
+    x1, y1, x2, y2 = (float(v) for v in boxes[index])
+    box_w = x2 - x1
+    box_h = y2 - y1
+    if box_w < 8 or box_h < 8:
+        return image, boxes, classes
+    if frac is None:
+        frac = float(rng.uniform(0.62, 0.98))
+    frac = min(0.98, max(0.2, float(frac)))
+    height, width = image.shape[:2]
+    side = max(box_w, box_h) / frac
+    crop_w = int(round(min(float(width), max(side, box_w + 1.0))))
+    crop_h = int(round(min(float(height), max(side, box_h + 1.0))))
+    crop_w = max(8, min(width, crop_w))
+    crop_h = max(8, min(height, crop_h))
+    cx = (x1 + x2) / 2.0 + float(rng.uniform(-0.08, 0.08)) * max(0.0, crop_w - box_w)
+    cy = (y1 + y2) / 2.0 + float(rng.uniform(-0.08, 0.08)) * max(0.0, crop_h - box_h)
+    left = int(round(cx - crop_w / 2.0))
+    top = int(round(cy - crop_h / 2.0))
+    left = min(max(0, left), width - crop_w)
+    top = min(max(0, top), height - crop_h)
+    cropped = image[top : top + crop_h, left : left + crop_w]
+    kept_boxes = []
+    kept_classes = []
+    for box, cls in zip(boxes, classes):
+        nx1 = float(np.clip(box[0] - left, 0, crop_w))
+        ny1 = float(np.clip(box[1] - top, 0, crop_h))
+        nx2 = float(np.clip(box[2] - left, 0, crop_w))
+        ny2 = float(np.clip(box[3] - top, 0, crop_h))
+        if (nx2 - nx1) * (ny2 - ny1) < 0.45 * max(1.0, (box[2] - box[0]) * (box[3] - box[1])):
+            continue
+        kept_boxes.append([nx1, ny1, nx2, ny2])
+        kept_classes.append(int(cls))
+    if not kept_boxes:
+        return image, boxes, classes
+    return (
+        cropped,
+        np.array(kept_boxes, dtype=np.float32),
+        np.array(kept_classes, dtype=np.int64),
+    )
+
+
 class DetDataset(Dataset):
     def __init__(self, root: str | Path, train: bool = True) -> None:
         self.root = Path(root)
@@ -37,6 +94,8 @@ class DetDataset(Dataset):
         else:
             boxes = np.zeros((0, 4), dtype=np.float32)
             classes = np.zeros((0,), dtype=np.int64)
+        if self.train and len(boxes) and np.random.random() < 0.5:
+            image, boxes, classes = crop_seal_large(image, boxes, classes, np.random.default_rng())
         if self.train and np.random.random() < 0.85:
             image = paint_distractors(image, np.random.default_rng(), boxes)
         tensor, target = _tensor_targets(image, boxes, classes)
