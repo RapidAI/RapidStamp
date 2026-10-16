@@ -62,8 +62,8 @@ def test_convert_rest_zip_one_crop(tmp_path: Path):
     meta = json.loads(labels[0].read_text(encoding="utf-8"))
     assert meta["source"] == "rest"
     assert meta["seals"][0]["text"] == "测试公司"
-    tsv = list((dst / "rec").rglob("labels.tsv"))
-    assert "测试公司" in tsv[0].read_text(encoding="utf-8")
+    tsv = "\n".join(path.read_text(encoding="utf-8") for path in (dst / "rec").rglob("labels.tsv"))
+    assert "测试公司" in tsv
 
 
 def test_charset_roundtrip_keeps_space(tmp_path: Path):

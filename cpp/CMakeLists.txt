@@ -12,6 +12,8 @@ if(NOT ORT_ROOT)
     message(FATAL_ERROR "Set -DORT_ROOT to an ONNX Runtime C/C++ release directory")
 endif()
 
+# MSVC does not export symbols by default, so the DLL otherwise has no import library.
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 add_library(rapidstamp SHARED src/engine.cpp src/geometry.cpp)
 add_library(rapidstamp_static STATIC src/engine.cpp src/geometry.cpp)
 # Keep the static archive name distinct. On Windows both targets otherwise
