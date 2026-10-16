@@ -22,8 +22,3 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 rapidstamp = ["models/*"]
-
-[tool.cibuildwheel]
-build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
-skip = "pp* *-musllinux* *i686*"
-test-command = "python -c \"import rapidstamp; print(rapidstamp.__version__)\""
