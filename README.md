@@ -19,7 +19,7 @@ CPU 上的印章检测与识别。覆盖中文圆形公章、椭圆章、方形�
 - `training/`：合成数据、检测和识别训练、ONNX 导出。字体子集在 `training/fonts/`。
 - `cpp/`：C API、与 Python 对齐的几何、ONNX Runtime 会话。编译方式见 [docs/sdk.md](docs/sdk.md)。
 - `python/`：PyPI 包 `rapidstamp`。
-- `.github/workflows/sdk.yml`：Python 测试、Linux / Windows / macOS 的 C++ 构建、Android arm64 交叉编译、cibuildwheel。
+- `.github/workflows/sdk.yml`：Python 测试、Linux / Windows / macOS 的 C++ 构建、Android arm64 交叉编译，以及在这三个系统上打包并安装 wheel。
 
 ## 训练
 

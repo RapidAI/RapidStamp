@@ -176,7 +176,7 @@ ReST 前三名都在真实 5,000 张之外合成了章：CCB 用公司名语料�
 
 - `training/`：合成、训练、ONNX 导出、ReST 与 StaVer 的转换脚本。
 - `cpp/`：C API、与 Python 对齐的几何、ONNX Runtime 会话。CI 编 Linux x64、Linux arm64、Windows x64、macOS arm64，并交叉编译 Android arm64。
-- `python/`：PyPI 包 `rapidstamp`，cibuildwheel 打 Linux / Windows / macOS 轮子。
+- `python/`：PyPI 包 `rapidstamp`。包是纯 Python，CI 在 Linux、Windows、macOS 上用 `python -m build` 打 `py3-none-any` 轮子并安装。
 - 权重和混合 hold-out 指标在 `models/`。检测是 COCO 预训练的 YOLOX-Nano，再在合成、ReST、Paddle 和网页训练页上微调；识别在自由环文上训练后，又用 Paddle 圆章和自由姓名格微调。
 - 网页印章图的采集脚本在 `training/scripts/collect_web_seals.py`，来源 URL 在 `training/manifests/web_seals_sources.jsonl`，固定划分在 `training/manifests/web_seals_split.jsonl`。图片只在训练机上。
 

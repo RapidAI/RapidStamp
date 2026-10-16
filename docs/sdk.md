@@ -73,4 +73,4 @@ cmake -S cpp -B build-ios \
 
 ## Python 轮子
 
-`python/` 是纯 Python 包，推理依赖 PyPI 上的 `onnxruntime`。GitHub Actions 用 cibuildwheel 在 Linux、Windows、macOS 上构建 `py3` 轮子。模型文件放在 `python/src/rapidstamp/models/` 时会打进轮子；否则运行时从 `RAPIDSTAMP_MODEL_DIR` 或仓库的 `models/` 读取。
+`python/` 是纯 Python 包，推理依赖 PyPI 上的 `onnxruntime`。GitHub Actions 在 Linux、Windows、macOS 上用 `python -m build` 打 `py3-none-any` 轮子并安装。模型文件放在 `python/src/rapidstamp/models/` 时会打进轮子；否则运行时从 `RAPIDSTAMP_MODEL_DIR` 或仓库的 `models/` 读取。

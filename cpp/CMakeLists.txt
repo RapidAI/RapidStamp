@@ -14,7 +14,8 @@ endif()
 
 add_library(rapidstamp SHARED src/engine.cpp src/geometry.cpp)
 add_library(rapidstamp_static STATIC src/engine.cpp src/geometry.cpp)
-set_target_properties(rapidstamp_static PROPERTIES OUTPUT_NAME rapidstamp)
+# Keep the static archive name distinct. On Windows both targets otherwise
+# write rapidstamp.lib, and the API test links the archive without ONNX Runtime.
 
 foreach(target rapidstamp rapidstamp_static)
     target_include_directories(${target}
