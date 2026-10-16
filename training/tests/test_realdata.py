@@ -6,7 +6,29 @@ from pathlib import Path
 import torch
 
 from rapidstamp_train.models import SealRec, adapt_recognizer
-from rapidstamp_train.realdata import convert_rest_zip, guess_seal, read_charset_file, write_charset_file
+from rapidstamp_train.realdata import (
+    convert_rest_zip,
+    guess_seal,
+    read_charset_file,
+    ring_start_deg,
+    write_charset_file,
+)
+
+
+def test_ring_start_follows_the_title_arc():
+    # Title runs clockwise from the left, over the top, to the right.
+    # y grows downward, so angle 180 is left and 270 is up.
+    import math
+
+    cx = cy = 150.0
+    radius = 100.0
+    points = []
+    for deg in range(180, 360, 8):
+        rad = math.radians(deg)
+        points.append([cx + radius * math.cos(rad), cy + radius * math.sin(rad)])
+    start = ring_start_deg(points, 300, 300)
+    assert start is not None
+    assert abs(start - 180.0) < 8.0
 
 
 def test_guess_seal_keywords_and_aspect():

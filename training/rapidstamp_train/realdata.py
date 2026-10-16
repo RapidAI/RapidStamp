@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -107,9 +108,48 @@ def _paste_on_page(
     return rgb, [left, top, left + sprite.width, top + sprite.height]
 
 
-def _rec_strip(crop: np.ndarray, layout: str, rng: np.random.Generator, mild: bool) -> np.ndarray:
+def ring_start_deg(points, width: int, height: int) -> float | None:
+    """Clockwise start of a title arc, in the same angle system as polar unwrap.
+
+    The polygon is a closed contour, so the largest angular gap is the part of
+    the circle with no title ink. Text begins at the clockwise end of that gap.
+    """
+    if not points:
+        return None
+    cx = (width - 1) / 2.0
+    cy = (height - 1) / 2.0
+    angles: list[float] = []
+    for pt in points:
+        if pt is None or len(pt) < 2:
+            continue
+        ang = math.degrees(math.atan2(float(pt[1]) - cy, float(pt[0]) - cx)) % 360.0
+        angles.append(ang)
+    unique = sorted(set(round(angle, 1) for angle in angles))
+    if len(unique) < 3:
+        return None
+    best_gap = -1.0
+    start = unique[0]
+    for index, angle in enumerate(unique):
+        nxt = unique[(index + 1) % len(unique)]
+        gap = (nxt - angle) % 360.0
+        if gap > best_gap:
+            best_gap = gap
+            start = nxt
+    if best_gap < 20.0:
+        return None
+    return float(start)
+
+
+def _rec_strip(
+    crop: np.ndarray,
+    layout: str,
+    rng: np.random.Generator,
+    mild: bool,
+    start_deg: float | None = None,
+) -> np.ndarray:
     # Upright crops: column 0 is 140 degrees, the same canonical angle inference always tries.
-    start = UNWRAP_START_DEG + float(rng.uniform(-8.0, 8.0))
+    base = UNWRAP_START_DEG if start_deg is None else float(start_deg)
+    start = base + float(rng.uniform(-8.0, 8.0))
     strip = strip_from_crop(crop, layout, 1, 1, start)
     if strip.shape[0] != REC_H or strip.shape[1] != REC_W:
         # grid / hline helpers already resize; keep a guard for odd crops.
@@ -255,6 +295,7 @@ def convert_paddle_zip(src: Path, dst: Path, limit: int = 0, seed: int = 2027) -
     stats = {"train": 0, "val": 0, "skipped": 0, "label_files": []}
     with zipfile.ZipFile(src) as archive:
         txts, by_base = _paddle_members(archive)
+        members = set(archive.namelist())
         if not txts:
             sample = archive.namelist()[:12]
             raise SystemExit(f"no train.txt/val.txt in {src}; first entries: {sample}")
@@ -277,7 +318,7 @@ def convert_paddle_zip(src: Path, dst: Path, limit: int = 0, seed: int = 2027) -
                     f"dataset/{rel}",
                     by_base.get(Path(rel).name, ""),
                 ]
-                member = next((item for item in candidates if item and item in archive.namelist()), None)
+                member = next((item for item in candidates if item and item in members), None)
                 if member is None:
                     stats["skipped"] += 1
                     continue
@@ -299,7 +340,9 @@ def convert_paddle_zip(src: Path, dst: Path, limit: int = 0, seed: int = 2027) -
                     split = "val"
                 placed = _scaled_crop(crop, rng)
                 page, bbox = _paste_on_page(placed, rng, latin)
-                strip = _rec_strip(crop, layout, rng, mild=(split == "val"))
+                title_points = labels[0]["points"] if labels else None
+                start_deg = ring_start_deg(title_points, width, height) if layout in {"circle", "ellipse"} else None
+                strip = _rec_strip(crop, layout, rng, mild=(split == "val"), start_deg=start_deg)
                 stem = f"paddle_{seen:06d}"
                 row = _write_sample(dst, split, stem, page, bbox, text, cls_name, layout, "paddle", strip)
                 lines[split].append(row)

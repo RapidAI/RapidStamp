@@ -32,6 +32,7 @@ def main() -> None:
     parser.add_argument("--rest", type=Path, default=None)
     parser.add_argument("--free", type=Path, default=None)
     parser.add_argument("--paddle", type=Path, default=None)
+    parser.add_argument("--grids", type=Path, default=None)
     parser.add_argument("--charset", type=Path, default=ROOT / "models" / "charset.txt")
     parser.add_argument("--mix", type=Path, default=Path("/home/mayong/rapidstamp/mix_ring"))
     parser.add_argument("--out", type=Path, default=Path("/home/mayong/rapidstamp/checkpoints/ringrec"))
@@ -43,6 +44,8 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--rest-repeat", type=int, default=4)
+    parser.add_argument("--paddle-repeat", type=int, default=2)
+    parser.add_argument("--init-rec", type=Path, default=None)
     args = parser.parse_args()
 
     sources: list[tuple[str, Path]] = [("synth_", args.synth)]
@@ -60,6 +63,11 @@ def main() -> None:
         if not args.paddle.is_dir():
             raise SystemExit(f"missing prepared Paddle tree: {args.paddle}")
         sources.append(("paddle_", args.paddle))
+        repeats["paddle_"] = args.paddle_repeat
+    if args.grids:
+        if not args.grids.is_dir():
+            raise SystemExit(f"missing free-grid tree: {args.grids}")
+        sources.append(("grid_", args.grids))
     link_mix(sources, args.mix, rec_repeat=repeats, base_charset=args.charset)
     train_rec(
         argparse.Namespace(
@@ -70,7 +78,7 @@ def main() -> None:
             lr=args.lr,
             workers=args.workers,
             device=args.device,
-            init=None,
+            init=args.init_rec,
         )
     )
     export_onnx(

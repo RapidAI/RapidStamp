@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from rapidstamp.ctc import ctc_greedy
+from rapidstamp.ctc import ctc_greedy, prefer_reading
 from rapidstamp.geometry import (
     decode_detections,
     grid_unroll,
@@ -182,16 +182,35 @@ class RapidStamp:
     def _read_arc(self, crop: np.ndarray, square: bool) -> tuple[str, float]:
         source = pad_to_square(crop, 255) if square else crop
         steps = max(1, self.angle_steps)
-        best = ("", -1.0)
+        readings: list[tuple[float, str, float]] = []
         for step in range(steps):
             start = step * (360.0 / steps)
             text, score = self._recognize(self._unwrap(source, start, self.r_in, self.r_out))
-            if score > best[1]:
-                best = (text, score)
+            readings.append((start, text, score))
         # The training distribution is left-aligned near this start. Always try it.
         text, score = self._recognize(self._unwrap(source, self.start_deg, self.r_in, self.r_out))
-        if score > best[1]:
-            best = (text, score)
+        readings.append((self.start_deg, text, score))
+        # The 15 degree grid often sits a few degrees off a perfect title. Refine
+        # the two strongest angles, then break near-ties toward the full title.
+        ranked = sorted(readings, key=lambda item: item[2], reverse=True)
+        refined = 0
+        seen: set[int] = set()
+        for start, _, _ in ranked:
+            key = int(round(start)) % 360
+            if key in seen:
+                continue
+            seen.add(key)
+            refined += 1
+            if refined > 2:
+                break
+            for delta in range(-12, 13, 3):
+                if delta == 0:
+                    continue
+                text, score = self._recognize(self._unwrap(source, start + delta, self.r_in, self.r_out))
+                readings.append((start + delta, text, score))
+        best = ("", -1.0)
+        for _, text, score in readings:
+            best = prefer_reading(best, (text, score))
         return best
 
     def _unwrap(self, source: np.ndarray, start: float, r_in: float, r_out: float) -> np.ndarray:

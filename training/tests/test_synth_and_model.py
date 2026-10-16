@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from rapidstamp.ctc import ctc_greedy
+from rapidstamp.ctc import ctc_greedy, prefer_reading
 from rapidstamp.labels import CLASS_NAMES, DET_SIZE, GRID
 from rapidstamp_train.corpus import MIDDLES, all_chars
 from rapidstamp_train.fonts_util import find_cjk_font, find_latin_font
@@ -61,6 +61,16 @@ def test_detector_loss_and_recognizer_shape():
     text, score = ctc_greedy(logits[0].detach().numpy(), charset)
     assert isinstance(text, str)
     assert 0.0 <= score <= 1.0
+
+
+def test_prefer_reading_keeps_the_full_title_on_a_near_tie():
+    short = ("厦门国泰", 0.99)
+    full = ("厦门国泰有限公司", 0.985)
+    rotated = ("0932958166224厦门盛达有限公司", 0.991)
+    upright = ("厦门盛达有限公司0932958166224", 0.989)
+    assert prefer_reading(short, full) == full
+    assert prefer_reading(rotated, upright)[0].startswith("厦")
+    assert prefer_reading(("ACME", 0.2), ("GLOBAL", 0.05))[0] == "ACME"
 
 
 def test_ctc_score_depends_on_script():

@@ -196,6 +196,41 @@ std::pair<std::string, float> ctc_greedy(const float* logits, int time_steps, in
     return {text, contains_cjk(text) ? mean : mass};
 }
 
+int utf8_len(const std::string& text) {
+    int count = 0;
+    for (unsigned char byte : text) {
+        if ((byte & 0xC0u) != 0x80u) count += 1;
+    }
+    return count;
+}
+
+bool cjk_start(const std::string& text) {
+    if (text.empty()) return false;
+    auto lead = static_cast<unsigned char>(text[0]);
+    size_t width = 1;
+    if ((lead & 0xE0u) == 0xC0u) width = 2;
+    else if ((lead & 0xF0u) == 0xE0u) width = 3;
+    else if ((lead & 0xF8u) == 0xF0u) width = 4;
+    if (width > text.size()) width = text.size();
+    return contains_cjk(text.substr(0, width));
+}
+
+// Keep this in step with python rapidstamp.ctc.prefer_reading.
+std::pair<std::string, float> prefer_reading(const std::pair<std::string, float>& current,
+                                             const std::pair<std::string, float>& candidate) {
+    constexpr float kMargin = 0.012f;
+    if (current.second < 0.f) return candidate;
+    if (candidate.second > current.second + kMargin) return candidate;
+    if (current.second > candidate.second + kMargin) return current;
+    int cand_len = utf8_len(candidate.first);
+    int best_len = utf8_len(current.first);
+    if (cand_len != best_len) return cand_len > best_len ? candidate : current;
+    bool cand_cjk = cjk_start(candidate.first);
+    bool best_cjk = cjk_start(current.first);
+    if (cand_cjk != best_cjk) return cand_cjk ? candidate : current;
+    return candidate.second >= current.second ? candidate : current;
+}
+
 std::pair<std::string, float> rapidstamp_engine::recognize(const RsImage& strip_in) {
     RsImage strip = strip_in;
     if (strip.width != config.rec_w || strip.height != config.rec_h) {
@@ -229,17 +264,38 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
         return best;
     }
     RsImage source = layout == "circle" ? pad_to_square(crop, 255) : crop;
-    std::pair<std::string, float> best{"", -1.f};
+    struct Reading {
+        float start;
+        std::string text;
+        float score;
+    };
+    std::vector<Reading> readings;
     int steps = std::max(1, config.angle_steps);
-    for (int step = 0; step < steps; ++step) {
-        float start = step * (360.f / static_cast<float>(steps));
+    auto push = [&](float start) {
         auto decoded = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
                                               config.span_deg));
-        if (decoded.second > best.second) best = decoded;
+        readings.push_back(Reading{start, decoded.first, decoded.second});
+    };
+    for (int step = 0; step < steps; ++step) push(step * (360.f / static_cast<float>(steps)));
+    push(config.start_deg);
+    std::vector<Reading> ranked = readings;
+    std::sort(ranked.begin(), ranked.end(), [](const Reading& a, const Reading& b) { return a.score > b.score; });
+    int refined = 0;
+    std::vector<int> seen;
+    for (const Reading& item : ranked) {
+        int key = static_cast<int>(std::lround(item.start)) % 360;
+        if (key < 0) key += 360;
+        if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
+        seen.push_back(key);
+        refined += 1;
+        if (refined > 2) break;
+        for (int delta = -12; delta <= 12; delta += 3) {
+            if (delta == 0) continue;
+            push(item.start + static_cast<float>(delta));
+        }
     }
-    auto canonical = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out,
-                                            config.start_deg, config.span_deg));
-    if (canonical.second > best.second) best = canonical;
+    std::pair<std::string, float> best{"", -1.f};
+    for (const Reading& item : readings) best = prefer_reading(best, {item.text, item.score});
     return best;
 }
 

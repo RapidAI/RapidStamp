@@ -11,6 +11,36 @@ def softmax(logits: np.ndarray) -> np.ndarray:
     return exp / np.maximum(exp.sum(axis=-1, keepdims=True), 1e-6)
 
 
+def prefer_reading(
+    current: tuple[str, float],
+    candidate: tuple[str, float],
+    margin: float = 0.012,
+) -> tuple[str, float]:
+    """Pick a ring reading when two angles are almost equally confident.
+
+    A rotated seal often emits the same glyphs with the code moved to the front,
+    or a truncated title, at nearly the same mean probability. Prefer the longer
+    string, then one that starts on a CJK character.
+    """
+    text, score = candidate
+    best_text, best_score = current
+    if best_score < 0:
+        return candidate
+    if score > best_score + margin:
+        return candidate
+    if best_score > score + margin:
+        return current
+    if len(text) != len(best_text):
+        return candidate if len(text) > len(best_text) else current
+
+    def cjk_start(value: str) -> bool:
+        return bool(value) and "\u4e00" <= value[0] <= "\u9fff"
+
+    if cjk_start(text) != cjk_start(best_text):
+        return candidate if cjk_start(text) else current
+    return candidate if score >= best_score else current
+
+
 def _contains_cjk(text: str) -> bool:
     return any("\u4e00" <= ch <= "\u9fff" for ch in text)
 
