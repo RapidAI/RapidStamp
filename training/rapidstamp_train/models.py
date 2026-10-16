@@ -125,3 +125,38 @@ def decode_boxes(raw: torch.Tensor, grid: int = GRID, det_size: int = DET_SIZE) 
 
 def count_params(module: nn.Module) -> int:
     return sum(p.numel() for p in module.parameters())
+
+
+def adapt_recognizer(checkpoint: dict, charset: list[str]) -> SealRec:
+    """Load a CTC checkpoint, expanding the final layer when the charset grew."""
+    model = SealRec(num_classes=1 + len(charset))
+    state = checkpoint["model"]
+    old_charset = checkpoint.get("charset")
+    if not old_charset or list(old_charset) == list(charset):
+        model.load_state_dict(state)
+        return model
+    own = model.state_dict()
+    for key, value in state.items():
+        if key.startswith("fc."):
+            continue
+        if key in own and tuple(own[key].shape) == tuple(value.shape):
+            own[key] = value.detach().cpu()
+    old_weight = state["fc.weight"].detach().cpu()
+    old_bias = state["fc.bias"].detach().cpu()
+    weight = own["fc.weight"]
+    bias = own["fc.bias"]
+    weight.zero_()
+    bias.zero_()
+    weight[0].copy_(old_weight[0])
+    bias[0].copy_(old_bias[0])
+    index = {ch: i + 1 for i, ch in enumerate(charset)}
+    for old_index, ch in enumerate(old_charset):
+        new_index = index.get(ch)
+        if new_index is None:
+            continue
+        weight[new_index].copy_(old_weight[old_index + 1])
+        bias[new_index].copy_(old_bias[old_index + 1])
+    own["fc.weight"] = weight
+    own["fc.bias"] = bias
+    model.load_state_dict(own)
+    return model

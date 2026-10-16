@@ -79,11 +79,14 @@ def evaluate(args: argparse.Namespace) -> dict:
     title_total = 0
     det_hit = 0
     per_class = {name: [0, 0] for name in engine.class_names}
+    by_source: dict[str, list[int]] = {}
     center_hit = 0
     center_total = 0
     started = time.perf_counter()
     for label_path in label_paths:
         meta = json.loads(label_path.read_text(encoding="utf-8"))
+        source = str(meta.get("source") or "synth")
+        bucket = by_source.setdefault(source, [0, 0, 0])
         image_path = root / "det" / "val" / "images" / f"{label_path.stem}.jpg"
         rgb = np.asarray(Image.open(image_path).convert("RGB"))
         seals = engine(rgb)
@@ -99,6 +102,7 @@ def evaluate(args: argparse.Namespace) -> dict:
             box = np.array(gt["bbox"], dtype=np.float32)
             gt_items.append((int(gt["cls"]), box))
             title_total += 1
+            bucket[1] += 1
             name = gt["name"]
             per_class.setdefault(name, [0, 0])
             per_class[name][1] += 1
@@ -114,8 +118,10 @@ def evaluate(args: argparse.Namespace) -> dict:
             if best_j >= 0 and best_iou >= 0.5:
                 used.add(best_j)
                 det_hit += 1
+                bucket[2] += 1
                 if _norm(seals[best_j].text) == _norm(gt["text"]):
                     title_hit += 1
+                    bucket[0] += 1
                     per_class[name][0] += 1
                 if gt.get("center_text"):
                     center_total += 1
@@ -135,6 +141,14 @@ def evaluate(args: argparse.Namespace) -> dict:
         "e2e_title_recall": title_hit / title_total if title_total else 0.0,
         "e2e_per_class": {
             name: (hits / total if total else None) for name, (hits, total) in sorted(per_class.items())
+        },
+        "e2e_by_source": {
+            name: {
+                "e2e_title_recall": hits / total if total else None,
+                "det_recall50": detected / total if total else None,
+                "n": total,
+            }
+            for name, (hits, total, detected) in sorted(by_source.items())
         },
         "invoice_center_exact": center_hit / center_total if center_total else None,
         "invoice_center_n": center_total,

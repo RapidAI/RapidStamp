@@ -13,12 +13,14 @@ from torch.utils.data import DataLoader
 from rapidstamp.ctc import ctc_greedy
 from rapidstamp_train.corpus import all_chars
 from rapidstamp_train.data import RecDataset, rec_collate
-from rapidstamp_train.models import SealRec, count_params
+from rapidstamp_train.models import SealRec, adapt_recognizer, count_params
+from rapidstamp_train.realdata import read_charset_file
 
 
 def train(args: argparse.Namespace) -> dict:
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
-    charset = all_chars()
+    charset_path = Path(args.data) / "charset.txt"
+    charset = read_charset_file(charset_path) if charset_path.is_file() else all_chars()
     train_set = RecDataset(Path(args.data) / "rec" / "train", charset)
     val_set = RecDataset(Path(args.data) / "rec" / "val", charset)
     train_loader = DataLoader(
@@ -30,7 +32,13 @@ def train(args: argparse.Namespace) -> dict:
         pin_memory=device.type == "cuda",
         persistent_workers=args.workers > 0,
     )
-    model = SealRec(num_classes=1 + len(charset)).to(device)
+    model = SealRec(num_classes=1 + len(charset))
+    init = getattr(args, "init", None)
+    if init:
+        state = torch.load(init, map_location="cpu", weights_only=False)
+        model = adapt_recognizer(state, charset)
+        print(f"loaded recognizer {init} classes {1+len(charset)}", flush=True)
+    model = model.to(device)
     params = count_params(model)
     print(f"recognizer params {params} classes {1+len(charset)} device {device} train {len(train_set)}", flush=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -108,6 +116,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--lr", type=float, default=1.5e-3)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--init", type=Path, default=None, help="Checkpoint to fine-tune")
     return parser
 
 

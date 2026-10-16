@@ -31,6 +31,8 @@ python training/scripts/train_all.py --out /data/rapidstamp --models models
 
 默认合成 10000 张训练页和 800 张验证页，检测训 36 个 epoch，识别训 24 个 epoch。`--fast` 只跑几十页、一个 epoch，用来确认合成、训练、导出和评测能串起来。数据、`*.pt` 不进 git；导出的 ONNX 和 `metrics.json` 放在 `models/`。
 
+真实印章包（ReST、PaddleOCR）和 checkpoint 放在训练机的 `/home/mayong`，准备方式见 [docs/data.md](docs/data.md)。`wang-zhix/seal_generate` 没有许可证，源码和它自带的专有字体不进入这个仓库；窄字和底部数字是在自己的绘制代码里做的，说明见 [docs/research.md](docs/research.md)。
+
 ## 推理
 
 ```bash

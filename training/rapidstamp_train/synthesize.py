@@ -87,7 +87,7 @@ def _assert_text(text: str) -> None:
         raise ValueError(f"text {text!r} has chars outside charset: {missing}")
 
 
-def _render_glyph(font: ImageFont.FreeTypeFont, ch: str) -> Image.Image:
+def _render_glyph(font: ImageFont.FreeTypeFont, ch: str, scale_x: float = 1.0) -> Image.Image:
     bbox = font.getbbox(ch)
     width = max(1, bbox[2] - bbox[0] + 4)
     height = max(1, bbox[3] - bbox[1] + 4)
@@ -103,7 +103,15 @@ def _render_glyph(font: ImageFont.FreeTypeFont, ch: str) -> Image.Image:
     x2 = min(arr.shape[1], int(xs.max()) + 1 + pad)
     y1 = max(0, int(ys.min()) - pad)
     y2 = min(arr.shape[0], int(ys.max()) + 1 + pad)
-    return image.crop((x1, y1, x2, y2))
+    image = image.crop((x1, y1, x2, y2))
+    # Seal faces are narrower than a square gothic. This is our own draw path;
+    # it is not copied from an external generator.
+    if scale_x < 0.99:
+        image = image.resize(
+            (max(1, int(round(image.width * scale_x))), image.height),
+            Image.Resampling.BILINEAR,
+        )
+    return image
 
 
 def _blit(dst: Image.Image, glyph: Image.Image, cx: float, cy: float) -> Image.Image:
@@ -144,7 +152,8 @@ def _draw_arc(
         rad = math.radians(phi)
         x = cx + radius_x * radial * math.cos(rad)
         y = cy + radius_y * radial * math.sin(rad)
-        glyph = _render_glyph(fonts.for_char(ch, font_size), ch)
+        scale_x = 0.70 if contains_cjk(ch) else 1.0
+        glyph = _render_glyph(fonts.for_char(ch, font_size), ch, scale_x=scale_x)
         glyph = glyph.rotate(-(phi + 90.0), expand=True, resample=Image.Resampling.BICUBIC)
         _blit(mask, glyph, x, y)
 
@@ -233,7 +242,7 @@ def make_seal(rng: np.random.Generator, fonts: FontBank, cls_name: str | None = 
         for r in range(rows):
             for c in range(cols):
                 ch = text[r * cols + c]
-                glyph = _render_glyph(fonts.for_char(ch, font_size), ch)
+                glyph = _render_glyph(fonts.for_char(ch, font_size), ch, scale_x=0.72)
                 cx = inner + (c + 0.5) * cell_w
                 cy = inner + (r + 0.5) * cell_h
                 canvas = _blit(canvas, glyph, cx, cy)
@@ -305,7 +314,7 @@ def make_seal(rng: np.random.Generator, fonts: FontBank, cls_name: str | None = 
         center_text = tax_id(rng)
     elif cls_name == "oval" and rng.random() < 0.7:
         bottom = "合同专用章"
-    elif cls_name == "round_official" and rng.random() < 0.45:
+    elif cls_name == "round_official" and rng.random() < 0.70:
         bottom = seal_code(rng)
 
     _assert_text(text)

@@ -1,0 +1,39 @@
+# 训练数据放在哪
+
+图像和 checkpoint 不进 git。训练机上 `/home` 和 `/home/mayong` 不是同一块盘，大文件只放 `/home/mayong`。
+
+| 路径 | 内容 |
+| --- | --- |
+| `/home/mayong/datasets/rest/rest_icdar2023.zip` | ICDAR 2023 ReST。包内没有许可证文件，不要再分发 |
+| `/home/mayong/datasets/paddle_seal/paddle_seal.zip` | PaddleOCR 印章包。上传目标就是这个路径 |
+| `/home/mayong/rapidstamp/synth` | 本仓库生成器写出的合成页 |
+| `/home/mayong/rapidstamp/real/rest` | `import_rest.py` 的输出 |
+| `/home/mayong/rapidstamp/real/paddle` | `import_paddle.py` 的输出 |
+| `/home/mayong/rapidstamp/mix` | 合成和真实数据的符号链接，以及并集字表 |
+| `/home/mayong/rapidstamp/checkpoints` | 微调权重 |
+| `/home/mayong/rapidstamp/models` | 导出的 ONNX |
+
+已有的 PyTorch 环境留在原处，不再往小盘装一份 CUDA 版。新的数据目录不要建到 `/home/znsoft`。
+
+准备和微调：
+
+```bash
+python training/scripts/import_rest.py \
+    --src /home/mayong/datasets/rest/rest_icdar2023.zip \
+    --dst /home/mayong/rapidstamp/real/rest
+
+python training/scripts/import_paddle.py \
+    --src /home/mayong/datasets/paddle_seal/paddle_seal.zip \
+    --dst /home/mayong/rapidstamp/real/paddle
+
+python training/scripts/finetune_real.py \
+    --synth /home/mayong/rapidstamp/synth \
+    --rest /home/mayong/rapidstamp/real/rest \
+    --paddle /home/mayong/rapidstamp/real/paddle \
+    --init-det /path/to/best_det.pt \
+    --init-rec /path/to/best_rec.pt
+```
+
+Paddle 的 zip 还没到位时，先不要传 `--paddle`。`import_paddle.py` 会直接退出。
+
+ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。

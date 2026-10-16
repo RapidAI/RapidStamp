@@ -60,6 +60,11 @@ def train(args: argparse.Namespace) -> dict:
         pin_memory=device.type == "cuda",
     )
     model = SealDet(len(CLASS_NAMES)).to(device)
+    init = getattr(args, "init", None)
+    if init:
+        state = torch.load(init, map_location="cpu", weights_only=False)
+        model.load_state_dict(state["model"])
+        print(f"loaded detector {init}", flush=True)
     params = count_params(model)
     print(f"detector params {params} device {device}", flush=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -115,6 +120,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--lr", type=float, default=2e-3)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--init", type=Path, default=None, help="Checkpoint to fine-tune")
     return parser
 
 
