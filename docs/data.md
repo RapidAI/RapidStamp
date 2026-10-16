@@ -64,6 +64,6 @@ python training/scripts/collect_web_seals.py \
     --manifest training/manifests/web_seals_sources.jsonl
 ```
 
-脚本会问 Bing、百度和 360 图片。Google 图片搜索会 302 跳转，这里不抓。这台机器上百度直接拒绝爬虫。中文查询和 “official round stamp on document” 上 Bing 回的是空页；英文的 notary、corporate seal 查询 Bing 有结果。2026-10-16 这一批留下 401 张：360 图片搜索 350 张，Bing 51 张，百度 0 张。来源页的版权仍归原站，这些图只做内部训练和评测。清单里的 `model_text` 是现有模型的预标注，`spot_check` 只覆盖抽看过的几张。
+脚本会问 Bing、百度和 360 图片。Google 图片搜索会 302 跳转，这里不抓。这台机器上百度直接拒绝爬虫。中文查询和 “official round stamp on document” 上 Bing 回的是空页；英文的 notary、corporate seal 查询 Bing 有结果。2026-10-16 这一批留下 401 张：360 图片搜索 350 张，Bing 51 张，百度 0 张。来源页的版权仍归原站，这些图只做内部训练和评测。清单里的 `model_text` 是现有模型在原图上的自动结果。这一版平均每张标出十几个框，环文经常塌成同一小撮字，不能直接当评测或训练标签。`spot_check` 只覆盖抽看过的 9 张。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。
