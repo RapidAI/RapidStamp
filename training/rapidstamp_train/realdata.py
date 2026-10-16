@@ -318,14 +318,27 @@ def convert_paddle_zip(src: Path, dst: Path, limit: int = 0, seed: int = 2027) -
     return stats
 
 
-def link_mix(sources: list[tuple[str, Path]], dst: Path) -> dict:
-    """Symlink prepared roots into one detection/recognition tree and union the charset."""
+def link_mix(
+    sources: list[tuple[str, Path]],
+    dst: Path,
+    rec_repeat: dict[str, int] | None = None,
+    base_charset: Path | None = None,
+) -> dict:
+    """Symlink prepared roots into one detection/recognition tree and union the charset.
+
+    ``rec_repeat`` repeats recognition rows for a prefix on the train split only.
+    ``base_charset`` keeps a known character order and still appends new characters.
+    """
     dst = Path(dst)
     rec_lines = {"train": [], "val": []}
     counts = {"det_train": 0, "det_val": 0, "rec_train": 0, "rec_val": 0}
     extra_chars: list[str] = []
-    seen = set(all_chars())
-    charset = list(all_chars())
+    if base_charset is not None and Path(base_charset).is_file():
+        charset = read_charset_file(Path(base_charset))
+    else:
+        charset = list(all_chars())
+    seen = set(charset)
+    repeats = rec_repeat or {}
     for prefix, root in sources:
         root = Path(root)
         if not root.is_dir():
@@ -354,8 +367,10 @@ def link_mix(sources: list[tuple[str, Path]], dst: Path) -> dict:
                         continue
                     out_name = f"{prefix}{name}"
                     _symlink(src_image, dst / "rec" / split / "images" / out_name)
-                    rec_lines[split].append(f"{out_name}\t{text}")
-                    counts[f"rec_{split}"] += 1
+                    times = max(1, int(repeats.get(prefix, 1))) if split == "train" else 1
+                    for _ in range(times):
+                        rec_lines[split].append(f"{out_name}\t{text}")
+                    counts[f"rec_{split}"] += times
                     for ch in text:
                         if ch not in seen:
                             seen.add(ch)

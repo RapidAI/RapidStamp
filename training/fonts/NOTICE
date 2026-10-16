@@ -1,4 +1,6 @@
-RapidStampCJK.ttf is a subset of WenQuanYi Micro Hei.
+RapidStampCJK.ttf is a subset of WenQuanYi Micro Hei covering the original
+synthetic charset. RapidStampCJK-ext.ttf is a larger subset of the same face
+covering the mixed synthetic and ReST charset used by the recognizer.
 
 Digitized data copyright 2007, Google Corporation.
 Copyright 2008-2009 WenQuanYi Board of Trustees (http://wenq.org/) and Qianqian Fang.

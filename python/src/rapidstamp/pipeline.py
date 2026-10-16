@@ -31,11 +31,16 @@ from rapidstamp.labels import (
     REC_H,
     REC_W,
     SCORE_THRESH,
+    UNWRAP_R_IN,
+    UNWRAP_R_OUT,
     UNWRAP_START_DEG,
     load_preprocess,
 )
 
 _GRID_CANDIDATES = ((2, 1), (3, 1), (4, 1), (2, 2))
+# Extra radial bands tried only around the winning angle. The default band
+# stays the one the strips were rendered with.
+_EXTRA_RADIAL_BANDS = ((0.64, 0.94), (0.78, 0.995))
 
 
 def default_model_dir() -> Path:
@@ -89,6 +94,9 @@ class RapidStamp:
         self.angle_steps = int(ANGLE_STEPS if angle_steps is None else angle_steps)
         if "angle_steps" in self.config and angle_steps is None:
             self.angle_steps = int(self.config["angle_steps"])
+        self.r_in = float(self.config.get("r_in", UNWRAP_R_IN))
+        self.r_out = float(self.config.get("r_out", UNWRAP_R_OUT))
+        self.start_deg = float(self.config.get("start_deg", UNWRAP_START_DEG))
         self.layouts = dict(CLASS_LAYOUT)
         self.layouts.update(self.config.get("layout", {}))
         self.class_names = _read_lines(directory / "classes.txt") or list(CLASS_NAMES)
@@ -178,18 +186,35 @@ class RapidStamp:
         source = pad_to_square(crop, 255) if square else crop
         steps = max(1, self.angle_steps)
         best = ("", -1.0)
+        best_start = self.start_deg
         for step in range(steps):
             start = step * (360.0 / steps)
-            strip = polar_unwrap(source, self.rec_w, self.rec_h, start_deg=start)
-            text, score = self._recognize(strip)
+            text, score = self._recognize(self._unwrap(source, start, self.r_in, self.r_out))
             if score > best[1]:
                 best = (text, score)
+                best_start = start
         # The training distribution is left-aligned near this start. Always try it.
-        strip = polar_unwrap(source, self.rec_w, self.rec_h, start_deg=UNWRAP_START_DEG)
-        text, score = self._recognize(strip)
+        text, score = self._recognize(self._unwrap(source, self.start_deg, self.r_in, self.r_out))
         if score > best[1]:
             best = (text, score)
+            best_start = self.start_deg
+        step_deg = 360.0 / steps
+        for start in (best_start - step_deg, best_start, best_start + step_deg, self.start_deg):
+            for r_in, r_out in _EXTRA_RADIAL_BANDS:
+                text, score = self._recognize(self._unwrap(source, start, r_in, r_out))
+                if score > best[1]:
+                    best = (text, score)
         return best
+
+    def _unwrap(self, source: np.ndarray, start: float, r_in: float, r_out: float) -> np.ndarray:
+        return polar_unwrap(
+            source,
+            self.rec_w,
+            self.rec_h,
+            r_in=r_in,
+            r_out=r_out,
+            start_deg=start,
+        )
 
     def _read_center(self, crop: np.ndarray) -> tuple[str, float]:
         height, width = crop.shape[:2]

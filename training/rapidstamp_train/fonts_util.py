@@ -19,6 +19,7 @@ def find_cjk_font() -> str:
     found = _first_existing(
         [
             os.environ.get("RAPIDSTAMP_CJK_FONT"),
+            str(_TRAINING_ROOT / "fonts" / "RapidStampCJK-ext.ttf"),
             str(_TRAINING_ROOT / "fonts" / "RapidStampCJK.ttf"),
             str(_TRAINING_ROOT / "fonts" / "RapidStampCJK.otf"),
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
@@ -27,7 +28,7 @@ def find_cjk_font() -> str:
     )
     if found is None:
         raise FileNotFoundError(
-            "No CJK font found. Set RAPIDSTAMP_CJK_FONT or add training/fonts/RapidStampCJK.otf."
+            "No CJK font found. Set RAPIDSTAMP_CJK_FONT or add training/fonts/RapidStampCJK-ext.ttf."
         )
     return found
 

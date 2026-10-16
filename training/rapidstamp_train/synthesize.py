@@ -143,6 +143,7 @@ def _draw_arc(
     span: float,
     radial: float,
     font_size: int,
+    cjk_scale: float = 0.70,
 ) -> None:
     if not text:
         return
@@ -152,7 +153,7 @@ def _draw_arc(
         rad = math.radians(phi)
         x = cx + radius_x * radial * math.cos(rad)
         y = cy + radius_y * radial * math.sin(rad)
-        scale_x = 0.70 if contains_cjk(ch) else 1.0
+        scale_x = cjk_scale if contains_cjk(ch) else 1.0
         glyph = _render_glyph(fonts.for_char(ch, font_size), ch, scale_x=scale_x)
         glyph = glyph.rotate(-(phi + 90.0), expand=True, resample=Image.Resampling.BICUBIC)
         _blit(mask, glyph, x, y)

@@ -12,7 +12,12 @@ def softmax(logits: np.ndarray) -> np.ndarray:
 
 
 def ctc_greedy(logits: np.ndarray, charset: list[str], blank: int = 0) -> tuple[str, float]:
-    """Decode (T, C) or (1, T, C) logits. ``charset`` does not include blank."""
+    """Decode (T, C) or (1, T, C) logits. ``charset`` does not include blank.
+
+    The score is the sum of emitted-step probabilities divided by the fixed
+    time length. Averaging only the emitted characters lets a short confident
+    fragment beat a longer title during the angle search.
+    """
     scores = np.asarray(logits, dtype=np.float32)
     if scores.ndim == 3:
         scores = scores[0]
@@ -28,6 +33,7 @@ def ctc_greedy(logits: np.ndarray, charset: list[str], blank: int = 0) -> tuple[
                 chars.append(charset[char_index])
                 chosen.append(float(probs[step, index]))
         previous = index
-    if not chosen:
+    steps = int(scores.shape[0])
+    if not chosen or steps <= 0:
         return "", 0.0
-    return "".join(chars), float(sum(chosen) / len(chosen))
+    return "".join(chars), float(sum(chosen) / steps)

@@ -71,35 +71,45 @@ class SealDet(nn.Module):
 
 
 class SealRec(nn.Module):
-    """CNN-CTC recognizer. Output is (B, T, num_classes) including blank."""
+    """CNN-CTC recognizer. Output is (B, T=96, num_classes) including blank.
+
+    Wider than the first recognizer so similar CJK glyphs are less likely to
+    collapse onto the synthetic company-name list. Dropout is training-only.
+    """
 
     def __init__(self, num_classes: int) -> None:
         super().__init__()
         self.cnn = nn.Sequential(
-            ConvBNAct(1, 32, 1),
-            ConvBNAct(32, 32, 1),
-            nn.MaxPool2d(2, 2),
-            ConvBNAct(32, 64, 1),
+            ConvBNAct(1, 48, 1),
+            ConvBNAct(48, 64, 1),
             nn.MaxPool2d(2, 2),
             ConvBNAct(64, 128, 1),
-            ConvBNAct(128, 128, 1),
+            ConvBNAct(128, 160, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBNAct(160, 256, 1),
+            ConvBNAct(256, 256, 1),
             nn.MaxPool2d((2, 1), (2, 1)),
-            ConvBNAct(128, 192, 1),
+            ConvBNAct(256, 384, 1),
             nn.MaxPool2d((2, 1), (2, 1)),
-            ConvBNAct(192, 256, 1),
-            nn.Conv2d(256, 256, kernel_size=(2, 1), bias=False),
-            nn.BatchNorm2d(256),
+            ConvBNAct(384, 384, 1),
+            nn.Conv2d(384, 384, kernel_size=(2, 1), bias=False),
+            nn.BatchNorm2d(384),
             nn.SiLU(inplace=True),
         )
         self.seq = nn.Sequential(
-            nn.Conv1d(256, 256, 3, padding=1, bias=False),
-            nn.BatchNorm1d(256),
+            nn.Conv1d(384, 384, 3, padding=1, bias=False),
+            nn.BatchNorm1d(384),
             nn.SiLU(inplace=True),
-            nn.Conv1d(256, 256, 3, padding=1, bias=False),
-            nn.BatchNorm1d(256),
+            nn.Dropout(0.1),
+            nn.Conv1d(384, 384, 3, padding=1, bias=False),
+            nn.BatchNorm1d(384),
+            nn.SiLU(inplace=True),
+            nn.Dropout(0.1),
+            nn.Conv1d(384, 384, 3, padding=1, bias=False),
+            nn.BatchNorm1d(384),
             nn.SiLU(inplace=True),
         )
-        self.fc = nn.Linear(256, num_classes)
+        self.fc = nn.Linear(384, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.cnn(x).squeeze(2)
@@ -132,6 +142,10 @@ def adapt_recognizer(checkpoint: dict, charset: list[str]) -> SealRec:
     model = SealRec(num_classes=1 + len(charset))
     state = checkpoint["model"]
     old_charset = checkpoint.get("charset")
+    old_fc = state.get("fc.weight")
+    if old_fc is None or tuple(old_fc.shape)[1:] != tuple(model.fc.weight.shape)[1:]:
+        # Channel width changed. The old backbone cannot be copied.
+        return model
     if not old_charset or list(old_charset) == list(charset):
         model.load_state_dict(state)
         return model

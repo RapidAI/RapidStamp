@@ -10,6 +10,8 @@
 | `/home/mayong/rapidstamp/real/rest` | `import_rest.py` 的输出 |
 | `/home/mayong/rapidstamp/real/paddle` | `import_paddle.py` 的输出 |
 | `/home/mayong/rapidstamp/mix` | 合成和真实数据的符号链接，以及并集字表 |
+| `/home/mayong/rapidstamp/free_rings` | 从整张字表抽的环文条带，用来减弱模板词偏置 |
+| `/home/mayong/rapidstamp/mix_ring` | 识别重训用的混合条带。ReST 训练条带重复 4 次 |
 | `/home/mayong/rapidstamp/checkpoints` | 微调权重 |
 | `/home/mayong/rapidstamp/models` | 导出的 ONNX |
 
@@ -35,5 +37,22 @@ python training/scripts/finetune_real.py \
 ```
 
 这一轮微调开始时，`paddle_seal.zip` 还不在上面的目录里，所以混合集只有合成页和 ReST。zip 传到之后再跑一次 `import_paddle.py` 和 `finetune_real.py`。
+
+环文整串识别另训一个更宽的识别器，检测权重不动：
+
+```bash
+python training/scripts/synth_free_rings.py \
+    --charset models/charset.txt \
+    --out /home/mayong/rapidstamp/free_rings
+
+python training/scripts/train_ring_rec.py \
+    --synth /home/mayong/rapidstamp/synth \
+    --rest /home/mayong/rapidstamp/real/rest \
+    --free /home/mayong/rapidstamp/free_rings \
+    --det /home/mayong/rapidstamp/checkpoints/finetune/best_det.pt \
+    --charset models/charset.txt
+```
+
+`train_ring_rec.py` 见到已经准备好的 `--paddle` 目录时会把它并进同一轮识别训练。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。

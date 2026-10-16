@@ -3,11 +3,26 @@ import torch
 
 from rapidstamp.ctc import ctc_greedy
 from rapidstamp.labels import CLASS_NAMES, DET_SIZE, GRID
-from rapidstamp_train.corpus import all_chars
+from rapidstamp_train.corpus import MIDDLES, all_chars
 from rapidstamp_train.fonts_util import find_cjk_font, find_latin_font
+from rapidstamp_train.free_rings import render_free_seal, sample_ring_text
 from rapidstamp_train.models import SealDet, SealRec, count_params
 from rapidstamp_train.losses import detection_loss
 from rapidstamp_train.synthesize import FontBank, make_seal
+
+
+def test_free_ring_text_leaves_the_template_list():
+    rng = np.random.default_rng(0)
+    cjk = list("甲乙丙丁戊己庚辛壬癸测章")
+    latin = list("ABCDEFGH")
+    digits = list("0123456789")
+    texts = [sample_ring_text(rng, cjk, latin, digits)[0] for _ in range(40)]
+    assert any(text not in set(MIDDLES) for text in texts)
+    assert any(any(ch in "甲乙丙丁戊己庚辛壬癸" for ch in text) for text in texts)
+    fonts = FontBank(find_cjk_font(), find_latin_font())
+    rgba = render_free_seal(rng, fonts, "甲乙丙丁公司", "", elliptic=False)
+    assert rgba.shape[-1] == 4
+    assert rgba[..., 3].max() > 0
 
 
 def test_charset_covers_rendered_text():
@@ -42,8 +57,36 @@ def test_detector_loss_and_recognizer_shape():
     assert count_params(rec) < 20_000_000
     strips = torch.rand(2, 1, 32, 384)
     logits = rec(strips)
-    assert logits.shape[0] == 2
-    assert logits.shape[2] == 1 + len(charset)
+    assert logits.shape == (2, 96, 1 + len(charset))
     text, score = ctc_greedy(logits[0].detach().numpy(), charset)
     assert isinstance(text, str)
     assert 0.0 <= score <= 1.0
+
+
+def test_ctc_score_prefers_the_longer_reading():
+    charset = ["a", "b"]
+    short = np.array(
+        [
+            [0, 8, 0],
+            [8, 0, 0],
+            [8, 0, 0],
+            [8, 0, 0],
+        ],
+        dtype=np.float32,
+    )
+    longer = np.array(
+        [
+            [0, 3, 0],
+            [0, 0, 3],
+            [4, 0, 0],
+            [4, 0, 0],
+        ],
+        dtype=np.float32,
+    )
+    short_text, short_score = ctc_greedy(short, charset)
+    long_text, long_score = ctc_greedy(longer, charset)
+    assert short_text == "a"
+    assert long_text == "ab"
+    assert long_score > short_score
+    assert 0.0 <= short_score <= 1.0
+    assert 0.0 <= long_score <= 1.0

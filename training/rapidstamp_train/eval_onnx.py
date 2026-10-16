@@ -49,6 +49,7 @@ def _iou(a, b) -> float:
 def _rec_exact(root: Path, engine: RapidStamp) -> dict:
     rows = (root / "rec" / "val" / "labels.tsv").read_text(encoding="utf-8").splitlines()
     groups = {"seal": [0, 0], "center": [0, 0], "plain": [0, 0]}
+    by_prefix: dict[str, list[int]] = {}
     for line in rows:
         if not line.strip():
             continue
@@ -59,11 +60,21 @@ def _rec_exact(root: Path, engine: RapidStamp) -> dict:
         # center files are "{id}_{ord}c.png"
         if name.endswith("c.png"):
             key = "center"
+        hit = int(_norm(pred) == _norm(text))
         groups[key][1] += 1
-        groups[key][0] += int(_norm(pred) == _norm(text))
+        groups[key][0] += hit
+        if key == "seal":
+            prefix = name.split("_", 1)[0]
+            bucket = by_prefix.setdefault(prefix, [0, 0])
+            bucket[1] += 1
+            bucket[0] += hit
     out = {}
     for key, (hit, total) in groups.items():
         out[key] = {"exact": hit / total if total else 0.0, "n": total}
+    out["by_prefix"] = {
+        prefix: {"exact": hit / total if total else 0.0, "n": total}
+        for prefix, (hit, total) in sorted(by_prefix.items())
+    }
     return out
 
 
