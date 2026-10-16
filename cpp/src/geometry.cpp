@@ -49,8 +49,6 @@ RsImage from_float(const float* sampled, int width, int height, int channels) {
     return out;
 }
 
-float sigmoid(float x) { return 1.f / (1.f + std::exp(-x)); }
-
 float iou(const RsDet& a, const RsDet& b) {
     float x1 = std::max(a.x1, b.x1);
     float y1 = std::max(a.y1, b.y1);
@@ -205,37 +203,27 @@ void gray01(const RsImage& src, std::vector<float>& dst) {
 
 std::vector<RsDet> decode_detections(const float* pred, int cells, int num_classes, float score_thresh,
                                      float nms_thresh, float box_limit) {
-    const int grid = static_cast<int>(std::lround(std::sqrt(static_cast<double>(cells))));
+    // Rows are already decoded: normalized xyxy, objectness probability, class probabilities.
+    // box_limit remains in the signature so the single-scale contract can still be passed.
+    (void)box_limit;
     std::vector<RsDet> candidates;
     for (int i = 0; i < cells; ++i) {
         const float* row = pred + static_cast<size_t>(i) * (5 + num_classes);
-        float tx = row[0];
-        float ty = row[1];
-        float tw = std::min(std::max(row[2], -box_limit), box_limit);
-        float th = std::min(std::max(row[3], -box_limit), box_limit);
-        float cx = (static_cast<float>(i % grid) + sigmoid(tx)) / static_cast<float>(grid);
-        float cy = (static_cast<float>(i / grid) + sigmoid(ty)) / static_cast<float>(grid);
-        float bw = std::exp(tw) / static_cast<float>(grid);
-        float bh = std::exp(th) / static_cast<float>(grid);
         int best = 0;
-        float best_logit = row[5];
+        float best_prob = row[5];
         for (int c = 1; c < num_classes; ++c) {
-            if (row[5 + c] > best_logit) {
-                best_logit = row[5 + c];
+            if (row[5 + c] > best_prob) {
+                best_prob = row[5 + c];
                 best = c;
             }
         }
-        float max_logit = best_logit;
-        float sum = 0.f;
-        for (int c = 0; c < num_classes; ++c) sum += std::exp(row[5 + c] - max_logit);
-        float class_prob = std::exp(best_logit - max_logit) / std::max(sum, 1e-6f);
-        float score = sigmoid(row[4]) * class_prob;
+        float score = row[4] * best_prob;
         if (score < score_thresh) continue;
         RsDet det;
-        det.x1 = cx - bw / 2.f;
-        det.y1 = cy - bh / 2.f;
-        det.x2 = cx + bw / 2.f;
-        det.y2 = cy + bh / 2.f;
+        det.x1 = row[0];
+        det.y1 = row[1];
+        det.x2 = row[2];
+        det.y2 = row[3];
         det.score = score;
         det.class_id = best;
         candidates.push_back(det);

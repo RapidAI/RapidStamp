@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from rapidstamp.ctc import ctc_greedy, prefer_reading
-from rapidstamp.labels import CLASS_NAMES, DET_SIZE, GRID
+from rapidstamp.labels import CLASS_NAMES, DET_SIZE
 from rapidstamp_train.corpus import MIDDLES, all_chars
 from rapidstamp_train.fonts_util import find_cjk_font, find_latin_font
 from rapidstamp_train.free_rings import render_free_seal, sample_ring_text
@@ -40,17 +40,21 @@ def test_detector_loss_and_recognizer_shape():
     det = SealDet()
     assert count_params(det) < 5_000_000
     images = torch.rand(2, 3, DET_SIZE, DET_SIZE)
+    det.train()
     raw = det(images)
-    assert raw.shape[0] == 2
-    assert raw.shape[1] == GRID * GRID
-    assert raw.shape[2] == 5 + len(CLASS_NAMES)
-    obj = torch.zeros(2, GRID, GRID)
-    obj[:, 4, 5] = 1
-    box = torch.zeros(2, GRID, GRID, 4)
-    box[:, 4, 5] = torch.tensor([0.2, 0.2, 0.5, 0.5])
-    cls = torch.zeros(2, GRID, GRID, dtype=torch.long)
-    loss, _parts = detection_loss(raw, obj, box, cls)
+    anchors = (DET_SIZE // 8) ** 2 + (DET_SIZE // 16) ** 2 + (DET_SIZE // 32) ** 2
+    assert raw.shape == (2, anchors, 5 + len(CLASS_NAMES))
+    targets = [
+        torch.tensor([[2.0, 0.2, 0.2, 0.45, 0.45]]),
+        torch.zeros(0, 5),
+    ]
+    loss, _parts = detection_loss(raw, targets)
     loss.backward()
+    det.eval()
+    decoded = det(images)
+    assert decoded.shape == raw.shape
+    assert float(decoded[..., :4].detach().min()) >= 0.0
+    assert float(decoded[..., :4].detach().max()) <= 1.0
 
     charset = all_chars()
     rec = SealRec(1 + len(charset))

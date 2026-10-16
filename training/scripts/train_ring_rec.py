@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("--paddle", type=Path, default=None)
     parser.add_argument("--grids", type=Path, default=None)
     parser.add_argument("--focus", type=Path, default=None, help="Minority-class strips (square, finance, invoice, latin, notary)")
+    parser.add_argument("--names", type=Path, default=None, help="Open-charset square name-seal strips")
     parser.add_argument("--charset", type=Path, default=ROOT / "models" / "charset.txt")
     parser.add_argument("--mix", type=Path, default=Path("/home/mayong/rapidstamp/mix_ring"))
     parser.add_argument("--out", type=Path, default=Path("/home/mayong/rapidstamp/checkpoints/ringrec"))
@@ -48,6 +49,7 @@ def main() -> None:
     parser.add_argument("--paddle-repeat", type=int, default=1)
     parser.add_argument("--grid-repeat", type=int, default=4)
     parser.add_argument("--focus-repeat", type=int, default=3)
+    parser.add_argument("--name-repeat", type=int, default=4)
     parser.add_argument("--init-rec", type=Path, default=None)
     args = parser.parse_args()
 
@@ -77,6 +79,11 @@ def main() -> None:
             raise SystemExit(f"missing focus-strip tree: {args.focus}")
         sources.append(("focus_", args.focus))
         repeats["focus_"] = args.focus_repeat
+    if args.names:
+        if not args.names.is_dir():
+            raise SystemExit(f"missing name-seal tree: {args.names}")
+        sources.append(("name_", args.names))
+        repeats["name_"] = args.name_repeat
     link_mix(sources, args.mix, rec_repeat=repeats, base_charset=args.charset)
     train_rec(
         argparse.Namespace(

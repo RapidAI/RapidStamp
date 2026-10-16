@@ -250,34 +250,20 @@ def decode_detections(
     det_size: int = DET_SIZE,
     box_logit_limit: float = BOX_LOGIT_LIMIT,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Decode a raw detector head.
+    """Read an exported YOLOX head.
 
-    ``pred`` is (A, 5+C) or (1, A, 5+C) with channels
-    tx, ty, tw, th, objectness logit, class logits.
-    Returns normalized xyxy, objectness probability, class probabilities.
+    ``pred`` is (A, 5+C) or (1, A, 5+C). The network already decoded anchors,
+    so each row is normalized xyxy, an objectness probability, and per-class
+    probabilities. ``grid`` and ``box_logit_limit`` are accepted so older call
+    sites keep working; multi-scale heads are not a single square grid.
     """
+    del grid, det_size, box_logit_limit
     raw = np.asarray(pred, dtype=np.float32)
     if raw.ndim == 3:
         raw = raw[0]
-    count = grid * grid
-    if raw.shape[0] != count:
-        raise ValueError(f"expected {count} cells, got {raw.shape}")
-    tx = raw[:, 0]
-    ty = raw[:, 1]
-    tw = np.clip(raw[:, 2], -box_logit_limit, box_logit_limit)
-    th = np.clip(raw[:, 3], -box_logit_limit, box_logit_limit)
-    gy = np.arange(count, dtype=np.float32) // grid
-    gx = np.arange(count, dtype=np.float32) % grid
-    cx = (gx + 1.0 / (1.0 + np.exp(-tx))) / grid
-    cy = (gy + 1.0 / (1.0 + np.exp(-ty))) / grid
-    bw = np.exp(tw) / grid
-    bh = np.exp(th) / grid
-    boxes = np.stack([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2], axis=1)
-    obj = 1.0 / (1.0 + np.exp(-raw[:, 4]))
-    logits = raw[:, 5:]
-    logits = logits - logits.max(axis=1, keepdims=True)
-    exp = np.exp(logits)
-    classes = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-6)
+    boxes = np.clip(raw[:, :4], 0.0, 1.0)
+    obj = np.clip(raw[:, 4], 0.0, 1.0)
+    classes = np.clip(raw[:, 5:], 0.0, 1.0)
     return boxes.astype(np.float32), obj.astype(np.float32), classes.astype(np.float32)
 
 

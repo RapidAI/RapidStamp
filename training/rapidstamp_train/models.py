@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from rapidstamp.labels import BOX_LOGIT_LIMIT, CLASS_NAMES, DET_SIZE, GRID
+from rapidstamp_train.yolox_nano import SealDet as SealDet
 
 
 class ConvBNAct(nn.Module):
@@ -39,35 +40,6 @@ class DSConv(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.op(x)
-
-
-class SealDet(nn.Module):
-    """Single-scale detector. Output is (B, grid*grid, 5+num_classes)."""
-
-    def __init__(self, num_classes: int = len(CLASS_NAMES)) -> None:
-        super().__init__()
-        self.num_classes = num_classes
-        self.features = nn.Sequential(
-            ConvBNAct(3, 32, 2),
-            DSConv(32, 64, 2),
-            DSConv(64, 96, 1),
-            DSConv(96, 128, 2),
-            DSConv(128, 160, 1),
-            DSConv(160, 192, 2),
-            DSConv(192, 192, 1),
-            ConvBNAct(192, 192, 1),
-        )
-        self.head = nn.Conv2d(192, 5 + num_classes, 1)
-        nn.init.zeros_(self.head.weight)
-        nn.init.zeros_(self.head.bias)
-        self.head.bias.data[2] = 1.5
-        self.head.bias.data[3] = 1.5
-        self.head.bias.data[4] = -2.2
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        feat = self.head(self.features(x))
-        feat = feat.permute(0, 2, 3, 1).contiguous()
-        return feat.view(feat.shape[0], -1, feat.shape[-1])
 
 
 class SealRec(nn.Module):

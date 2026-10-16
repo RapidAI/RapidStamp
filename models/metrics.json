@@ -1,41 +1,41 @@
 {
   "images": 1277,
-  "det_map50": 0.804079724900556,
+  "det_map50": 0.8350173723808452,
   "det_per_class_ap50": {
-    "round_official": 0.9671322890025138,
-    "oval": 0.6642387133072538,
+    "round_official": 0.9859789767010589,
+    "oval": 0.7494863729853698,
     "square_personal": 1.0,
-    "finance": 0.6210768004388189,
-    "invoice": 0.953191439913935,
-    "company_latin": 0.6485537929204395,
-    "notary": 0.5959270685743276,
-    "rect_stamp": 0.982517695047159
+    "finance": 0.6151093666672938,
+    "invoice": 0.9619701343123062,
+    "company_latin": 0.6581596854066487,
+    "notary": 0.709434442974084,
+    "rect_stamp": 1.0
   },
-  "det_recall50": 0.9967845659163987,
-  "e2e_title_recall": 0.5131832797427652,
+  "det_recall50": 1.0,
+  "e2e_title_recall": 0.5228295819935691,
   "e2e_per_class": {
-    "company_latin": 0.8976377952755905,
-    "finance": 0.5470085470085471,
-    "invoice": 0.7566371681415929,
+    "company_latin": 0.84251968503937,
+    "finance": 0.6410256410256411,
+    "invoice": 0.7256637168141593,
     "notary": 0.7787610619469026,
-    "oval": 0.3151750972762646,
-    "rect_stamp": 0.8304093567251462,
-    "round_official": 0.33906633906633904,
+    "oval": 0.3463035019455253,
+    "rect_stamp": 0.9239766081871345,
+    "round_official": 0.32432432432432434,
     "square_personal": 0.0
   },
   "e2e_by_source": {
     "rest": {
-      "e2e_title_recall": 0.21593291404612158,
-      "det_recall50": 0.9916142557651991,
+      "e2e_title_recall": 0.2389937106918239,
+      "det_recall50": 1.0,
       "n": 477
     },
     "synth": {
-      "e2e_title_recall": 0.6447124304267161,
-      "det_recall50": 0.9990723562152134,
+      "e2e_title_recall": 0.6484230055658627,
+      "det_recall50": 1.0,
       "n": 1078
     }
   },
-  "invoice_center_exact": 0.08943089430894309,
+  "invoice_center_exact": 0.04065040650406504,
   "invoice_center_n": 123,
   "rec_strips": {
     "seal": {
@@ -61,7 +61,7 @@
       }
     }
   },
-  "ms_per_image": 217.21481533987102,
+  "ms_per_image": 188.39042781674965,
   "gt_seals": 1555,
   "free_ring_val_exact": 0.9062,
   "free_ring_val_n": 800,
@@ -75,25 +75,46 @@
   "synth_square_strip_n": 137,
   "synth_round_strip_exact": 0.7643979057591623,
   "synth_round_strip_n": 191,
+  "det_params": 898119,
+  "det_onnx_bytes": 3671258,
   "rec_params": 6169425,
   "rec_classes": 2817,
   "real_web_test": {
     "images": 52,
     "gt_seals": 58,
     "split": "sha256 prefix mod 10 < 3, collages excluded from test",
-    "before": {
+    "scratch": {
       "precision50": 0.023668639053254437,
       "recall50": 0.3448275862068966,
       "det_map50": 0.07628067739337119,
       "predictions": 845,
       "ms_per_image": 2192.1300481923163
     },
-    "after": {
+    "before": {
       "precision50": 0.03278688524590164,
       "recall50": 0.3793103448275862,
       "det_map50": 0.03235034393891217,
       "predictions": 671,
       "ms_per_image": 1577.2765494229343
+    },
+    "after": {
+      "precision50": 0.27058823529411763,
+      "recall50": 0.39655172413793105,
+      "det_map50": 0.09694082309013018,
+      "predictions": 85,
+      "ms_per_image": 268.15212769221176
     }
+  },
+  "rejected_name_rec": {
+    "published": false,
+    "reason": "paddle title fell and square strips stayed 0/137",
+    "synth_square_strip_exact": 0.0,
+    "synth_square_strip_n": 137,
+    "name_holdout_exact": 0.045,
+    "name_holdout_n": 200,
+    "paddle_val_exact": 0.07946080170273147,
+    "paddle_title_exact": 0.31926214969847466,
+    "paddle_n": 2819,
+    "mix_e2e_title_recall": 0.5138263665594855
   }
 }

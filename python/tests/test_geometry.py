@@ -27,6 +27,20 @@ def test_constants_match_cpp_header():
     assert str(int(UNWRAP_SPAN_DEG)) in text
 
 
+def test_decoded_head_is_already_xyxy_and_probabilities():
+    from rapidstamp.geometry import decode_detections
+
+    row = np.zeros(5 + 8, dtype=np.float32)
+    row[:4] = (0.1, 0.2, 0.4, 0.55)
+    row[4] = 0.8
+    row[7] = 0.5
+    boxes, obj, classes = decode_detections(row.reshape(1, 1, -1))
+    assert boxes.shape == (1, 4)
+    assert np.allclose(boxes[0], [0.1, 0.2, 0.4, 0.55])
+    assert obj[0] == np.float32(0.8)
+    assert int(classes[0].argmax()) == 2
+
+
 def test_ring_gap_starts_at_the_clockwise_end():
     image = np.full((180, 180, 3), 245, dtype=np.uint8)
     cx = cy = 89.5

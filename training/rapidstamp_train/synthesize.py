@@ -210,6 +210,60 @@ def _paper_fill(width: int, height: int, box: list[float], round_shape: bool) ->
     return layer
 
 
+_NAME_LAYOUTS = ((2, 1), (3, 1), (2, 2), (4, 1))
+
+
+def sample_name(rng: np.random.Generator, chars: list[str] | None = None) -> tuple[str, int, int]:
+    """A personal-seal string. Closed surname list stays a small share."""
+    if chars is None and rng.random() < 0.08:
+        return personal_name(rng)
+    pool = chars if chars is not None else [ch for ch in CHARSET if ord(ch) > 127]
+    rows, cols = _NAME_LAYOUTS[int(rng.integers(0, len(_NAME_LAYOUTS)))]
+    picked = rng.choice(np.array(pool, dtype=object), size=rows * cols)
+    return "".join(str(ch) for ch in picked), rows, cols
+
+
+def render_name_seal(
+    rng: np.random.Generator,
+    fonts: FontBank,
+    text: str,
+    rows: int,
+    cols: int,
+) -> np.ndarray:
+    """Square name seal. Yin carving is a red field with the characters cut out.
+
+    There is no redistributable seal-script font in this repo. Heavier strokes
+    (a max filter) stand in for 篆书, on top of the CJK face the eval strips use.
+    """
+    side = int(rng.integers(180, 280))
+    canvas = Image.new("L", (side, side), 0)
+    draw = ImageDraw.Draw(canvas)
+    margin = int(side * 0.06)
+    border = max(4, side // 28)
+    draw.rectangle([margin, margin, side - margin, side - margin], outline=255, width=border)
+    inner = margin + border + int(side * 0.04)
+    cell_w = (side - 2 * inner) / max(cols, 1)
+    cell_h = (side - 2 * inner) / max(rows, 1)
+    carved = rng.random() < 0.5
+    yin = rng.random() < 0.45
+    font_size = int(min(cell_w, cell_h) * (0.58 if carved else 0.76))
+    for row in range(rows):
+        for col in range(cols):
+            ch = text[row * cols + col]
+            glyph = _render_glyph(fonts.for_char(ch, font_size), ch, scale_x=0.72 if contains_cjk(ch) else 1.0)
+            if carved:
+                glyph = glyph.filter(ImageFilter.MaxFilter(3))
+            cx = inner + (col + 0.5) * cell_w
+            cy = inner + (row + 0.5) * cell_h
+            canvas = _blit(canvas, glyph, cx, cy)
+    if yin:
+        canvas = ImageChops.invert(canvas)
+        ImageDraw.Draw(canvas).rectangle(
+            [margin, margin, side - margin, side - margin], outline=255, width=border
+        )
+    return _compose(canvas, _ink_color(rng, "square_personal"), rng, round_shape=False, margin=margin)
+
+
 def make_seal(rng: np.random.Generator, fonts: FontBank, cls_name: str | None = None) -> dict:
     """Render one upright seal. ``text`` is the ring or stamp transcription."""
     if cls_name is None:
@@ -229,26 +283,9 @@ def make_seal(rng: np.random.Generator, fonts: FontBank, cls_name: str | None = 
     bottom = ""
 
     if cls_name == "square_personal":
-        text, rows, cols = personal_name(rng)
-        side = int(rng.integers(180, 280))
-        canvas = Image.new("L", (side, side), 0)
-        draw = ImageDraw.Draw(canvas)
-        margin = int(side * 0.06)
-        border = max(4, side // 28)
-        draw.rectangle([margin, margin, side - margin, side - margin], outline=255, width=border)
-        inner = margin + border + int(side * 0.03)
-        cell_w = (side - 2 * inner) / cols
-        cell_h = (side - 2 * inner) / rows
-        font_size = int(min(cell_w, cell_h) * 0.72)
-        for r in range(rows):
-            for c in range(cols):
-                ch = text[r * cols + c]
-                glyph = _render_glyph(fonts.for_char(ch, font_size), ch, scale_x=0.72)
-                cx = inner + (c + 0.5) * cell_w
-                cy = inner + (r + 0.5) * cell_h
-                canvas = _blit(canvas, glyph, cx, cy)
+        text, rows, cols = sample_name(rng)
         _assert_text(text)
-        rgba = _compose(canvas, _ink_color(rng, cls_name), rng, round_shape=False, margin=margin)
+        rgba = render_name_seal(rng, fonts, text, rows, cols)
         return _pack(cls_name, text, layout, rows, cols, rgba, center_text)
 
     if cls_name == "rect_stamp":

@@ -1,0 +1,18 @@
+RapidStamp
+
+Copyright 2026 RapidAI
+
+Licensed under the Apache License, Version 2.0.
+
+The seal detector in training/rapidstamp_train/yolox_nano.py is a
+weight-compatible reimplementation of YOLOX-Nano (depth 0.33, width 0.25,
+depthwise) so the published COCO checkpoint can be loaded. That architecture
+and the checkpoint are Copyright (c) 2014-2021 Megvii Inc. and are licensed
+under the Apache License, Version 2.0.
+
+https://github.com/Megvii-BaseDetection/YOLOX
+https://github.com/Megvii-BaseDetection/YOLOX/blob/main/LICENSE
+
+Ultralytics YOLO is not included. Its license is AGPL-3.0.
+
+training/fonts/NOTICE covers the bundled WenQuanYi Micro Hei subsets.

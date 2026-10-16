@@ -56,6 +56,10 @@ python training/scripts/train_ring_rec.py \
 
 `train_ring_rec.py --paddle` 会把 Paddle 条带、自由环文和自由姓名格并进同一轮识别训练。2026-10-16 这一轮用了已经导入的 Paddle 目录，字表扩到 2,816。指标见 `models/metrics.json`。
 
+检测微调是 `training/scripts/train_yolox_det.py`。它在训练机下载 Megvii 的 `yolox_nano.pth` 到 `/home/mayong/rapidstamp/weights/`（`*.pth` 不进 git），把合成、ReST、Paddle 和网页训练页链到 `mix_yolox`，并在图上画红蓝字、线条、表格和 logo。`*.pt` 同样不进 git。
+
+方形名章条带用 `training/scripts/synth_name_seals.py` 从现有字表里抽可绘制汉字，写出阴阳刻条带。2026-10-16 在 `/home/mayong/rapidstamp/name_seals` 生成了 12,000 条训练条带。接着训出的识别器没有替换 `models/seal_rec.onnx`，原因见研究报告第 9 节。
+
 网页印章图用搜索引擎采集，图片留在 `/home/mayong/datasets/web_seals/`，来源 URL 写在 `training/manifests/web_seals_sources.jsonl`：
 
 ```bash

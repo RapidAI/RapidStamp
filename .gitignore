@@ -11,5 +11,6 @@ wheelhouse/
 data/
 training/outputs/
 *.pt
+*.pth
 .DS_Store
 third_party/
