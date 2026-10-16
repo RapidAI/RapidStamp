@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rapidstamp"
+version = "0.1.0"
+description = "Small CPU runtime for seal and stamp detection and recognition"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+dependencies = [
+    "numpy>=1.24",
+    "onnxruntime>=1.18",
+    "pillow>=10",
+]
+
+[project.scripts]
+rapidstamp = "rapidstamp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rapidstamp = ["models/*"]
+
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+skip = "pp* *-musllinux* *i686*"
+test-command = "python -c \"import rapidstamp; print(rapidstamp.__version__)\""
