@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          pip install -e python/
+          pip install -r training/requirements.txt
+      - name: Unit tests
+        run: pytest -q tests/test_geometry.py tests/test_export_parity.py tests/test_train_smoke.py tests/test_e2e.py
+      - name: C++ library and parity
+        run: |
+          cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          cmake --build cpp/build -j
+          ctest --test-dir cpp/build --output-on-failure
+          pytest -q tests/test_cpp.py
+
+  cpp:
+    name: cpp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+      - name: Build
+        run: cmake --build cpp/build --config Release -j
+      - name: Test
+        run: ctest --test-dir cpp/build -C Release --output-on-failure
+
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: |
+          cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          cmake --build cpp/build -j
+          ctest --test-dir cpp/build --output-on-failure
+
+  linux-arm64-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross compiler
+        run: sudo apt-get update && sudo apt-get install -y g++-aarch64-linux-gnu
+      - name: Cross-build
+        run: |
+          cmake -S cpp -B cpp/build-arm64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+          cmake --build cpp/build-arm64 -j
+
+  macos-universal:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Universal build (arm64 + x86_64)
+        run: |
+          cmake -S cpp -B cpp/build-universal \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build cpp/build-universal -j
+
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+      - name: Build ${{ matrix.abi }}
+        run: |
+          cmake -S cpp -B cpp/build-android \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build cpp/build-android -j
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build static library for iOS arm64
+        run: |
+          cmake -S cpp -B cpp/build-ios \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DRAPIDSTAMP_BUILD_TOOLS=OFF
+          cmake --build cpp/build-ios -j
