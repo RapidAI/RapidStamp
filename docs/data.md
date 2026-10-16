@@ -6,6 +6,7 @@
 | --- | --- |
 | `/home/mayong/datasets/rest/rest_icdar2023.zip` | ICDAR 2023 ReST。包内没有许可证文件，不要再分发 |
 | `/home/mayong/datasets/paddle_seal/paddle_seal.zip` | PaddleOCR 印章包。上传目标就是这个路径 |
+| `/home/mayong/datasets/web_seals/` | 搜索引擎采到的真实盖章图。只在训练机上，不进 git |
 | `/home/mayong/rapidstamp/synth` | 本仓库生成器写出的合成页 |
 | `/home/mayong/rapidstamp/real/rest` | `import_rest.py` 的输出 |
 | `/home/mayong/rapidstamp/real/paddle` | `import_paddle.py` 的输出 |
@@ -36,7 +37,7 @@ python training/scripts/finetune_real.py \
     --init-rec /path/to/best_rec.pt
 ```
 
-这一轮微调开始时，`paddle_seal.zip` 还不在上面的目录里，所以混合集只有合成页和 ReST。zip 传到之后再跑一次 `import_paddle.py` 和 `finetune_real.py`。
+Paddle 的 zip 已经在上面的路径里，`import_paddle.py` 写出了训练 7,181 条、验证 2,819 条。识别微调用的是 `train_ring_rec.py --paddle`，不是 `finetune_real.py`。
 
 环文整串识别另训一个更宽的识别器，检测权重不动：
 
@@ -53,6 +54,16 @@ python training/scripts/train_ring_rec.py \
     --charset models/charset.txt
 ```
 
-`train_ring_rec.py` 见到已经准备好的 `--paddle` 目录时会把它并进同一轮识别训练。2026-10-16 这次重训时 zip 还不在，混合集是合成条带、4 倍 ReST 和自由环文。指标见 `models/metrics.json`。
+`train_ring_rec.py --paddle` 会把 Paddle 条带、自由环文和自由姓名格并进同一轮识别训练。2026-10-16 这一轮用了已经导入的 Paddle 目录，字表扩到 2,816。指标见 `models/metrics.json`。
+
+网页印章图用搜索引擎采集，图片留在 `/home/mayong/datasets/web_seals/`，来源 URL 写在 `training/manifests/web_seals_sources.jsonl`：
+
+```bash
+python training/scripts/collect_web_seals.py \
+    --out /home/mayong/datasets/web_seals \
+    --manifest training/manifests/web_seals_sources.jsonl
+```
+
+脚本会问 Bing、百度和 360 图片。Google 图片搜索会 302 跳转，这里不抓。这台机器上百度直接拒绝爬虫。中文查询和 “official round stamp on document” 上 Bing 回的是空页；英文的 notary、corporate seal 查询 Bing 有结果。2026-10-16 这一批留下 401 张：360 图片搜索 350 张，Bing 51 张，百度 0 张。来源页的版权仍归原站，这些图只做内部训练和评测。清单里的 `model_text` 是现有模型的预标注，`spot_check` 只覆盖抽看过的几张。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。

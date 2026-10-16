@@ -12,34 +12,34 @@
     "rect_stamp": 0.9726529457263844
   },
   "det_recall50": 0.9987138263665595,
-  "e2e_title_recall": 0.41286173633440515,
+  "e2e_title_recall": 0.4270096463022508,
   "e2e_per_class": {
-    "company_latin": 0.8110236220472441,
-    "finance": 0.452991452991453,
-    "invoice": 0.6017699115044248,
-    "notary": 0.6637168141592921,
-    "oval": 0.20622568093385213,
-    "rect_stamp": 0.8362573099415205,
-    "round_official": 0.1941031941031941,
+    "company_latin": 0.7559055118110236,
+    "finance": 0.37606837606837606,
+    "invoice": 0.6150442477876106,
+    "notary": 0.7345132743362832,
+    "oval": 0.22568093385214008,
+    "rect_stamp": 0.8304093567251462,
+    "round_official": 0.25061425061425063,
     "square_personal": 0.0
   },
   "e2e_by_source": {
     "rest": {
-      "e2e_title_recall": 0.19916142557651992,
+      "e2e_title_recall": 0.21174004192872117,
       "det_recall50": 1.0,
       "n": 477
     },
     "synth": {
-      "e2e_title_recall": 0.5074211502782932,
+      "e2e_title_recall": 0.5222634508348795,
       "det_recall50": 0.9981447124304267,
       "n": 1078
     }
   },
-  "invoice_center_exact": 0.0975609756097561,
+  "invoice_center_exact": 0.04065040650406504,
   "invoice_center_n": 123,
   "rec_strips": {
     "seal": {
-      "exact": 0.6360128617363344,
+      "exact": 0.6334405144694534,
       "n": 1555
     },
     "center": {
@@ -52,15 +52,29 @@
     },
     "by_prefix": {
       "rest": {
-        "exact": 0.24737945492662475,
+        "exact": 0.23689727463312368,
         "n": 477
       },
       "synth": {
-        "exact": 0.8079777365491652,
+        "exact": 0.8089053803339518,
         "n": 1078
       }
     }
   },
-  "ms_per_image": 453.931492436968,
-  "gt_seals": 1555
+  "ms_per_image": 728.5398696985225,
+  "gt_seals": 1555,
+  "free_ring_val_exact": 0.9062,
+  "free_ring_val_n": 800,
+  "paddle_val_exact": 0.1128059595601277,
+  "paddle_val_n": 2819,
+  "paddle_title_exact": 0.4647037956722242,
+  "paddle_title_n": 2819,
+  "free_grid_val_exact": 0.375,
+  "free_grid_val_n": 400,
+  "synth_square_strip_exact": 0.0,
+  "synth_square_strip_n": 137,
+  "synth_round_strip_exact": 0.7643979057591623,
+  "synth_round_strip_n": 191,
+  "rec_params": 6169425,
+  "rec_classes": 2817
 }
