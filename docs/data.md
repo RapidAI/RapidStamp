@@ -74,6 +74,10 @@ python training/scripts/collect_web_seals.py \
 
 固定划分写在 `training/manifests/web_seals_split.jsonl`，不随新增文件重抽：sha256 前 8 位转成整数后模 10，小于 3 为测试，其余可训练；拼图只进训练。文章页和商品图整类排除，不用作空负样本，因为页面上往往还有章，标成空会教检测器把章压掉。只有审成「无关」的页是空负样本。框是红蓝墨连通域，再对上审阅时给的大致区域；彩色页上没有红蓝墨的框丢掉。当前清单是训练 137 页、测试 52 页、排除 191 页、没有可用框而跳过 21 页。测试集上的文字几乎是空的，整串命中不以这 52 页为准。图片在 `/home/mayong/rapidstamp/real/web`（训练）和 `/home/mayong/rapidstamp/real/web_test`（测试，目录名是 `det/val`，这样评测脚本不用改）。这 52 页不再重抽。
 
-用户另交的一批裁图在 `/home/mayong/datasets/user_seals/`（`images/` 与 `compound-img/`，229 张 png，压缩包里没有转写）。导入脚本是 `training/scripts/import_user_seals.py`。框是红、蓝或灰扫描上的深色墨外接矩形，每张图一枚章。形状按框的长短边和四角是否还有墨来定；这一批四角是纸、长短边接近，类别都是 `round_official`。没有可靠转写，金标准文字留空，不用模型输出回填。同一拍摄（文件名去掉末尾 `_N`）或像素完全相同的文件合成一组，按组名的 sha256 前 8 位模 10，小于 3 为测试，其余训练。像素完全相同的副本只保留一份，避免测试图再进训练。清单是 `training/manifests/user_seals_split.jsonl`。图片在 `/home/mayong/rapidstamp/real/user_seals`（训练）和 `/home/mayong/rapidstamp/real/user_seals_test`（测试）。这批的精确率、召回和 mAP 单独报告，不并进上面那 52 页。2026-10-16 用已发布检测器（得分阈值 0.25）在 63 张测试裁图上：精确率 0（0/2）、召回 0（0/63）、mAP50 0、约 24 ms/张。把阈值降到 0.05 后仍没有一个预测框和金标准的 IoU 达到 0.5，打出来的是章内部的小碎片，而不是铺满画面的整枚章。文字没有金标准，整串命中不在这批上计算。
+用户另交的一批裁图在 `/home/mayong/datasets/user_seals/`（`images/` 与 `compound-img/`，229 张 png，压缩包里没有转写）。导入脚本是 `training/scripts/import_user_seals.py`。框是红、蓝或灰扫描上的深色墨外接矩形，每张图一枚章。形状按框的长短边和四角是否还有墨来定；这一批四角是纸、长短边接近，类别都是 `round_official`。没有可靠转写，金标准文字留空，不用模型输出回填。同一拍摄（文件名去掉末尾 `_N`）或像素完全相同的文件合成一组，按组名的 sha256 前 8 位模 10，小于 3 为测试，其余训练。像素完全相同的副本只保留一份，避免测试图再进训练。清单是 `training/manifests/user_seals_split.jsonl`。图片在 `/home/mayong/rapidstamp/real/user_seals`（训练）和 `/home/mayong/rapidstamp/real/user_seals_test`（测试）。这批的精确率、召回和 mAP 单独报告，不并进上面那 52 页。2026-10-16 用已发布检测器（得分阈值 0.25）在 63 张测试裁图上：精确率 0（0/2）、召回 0（0/63）、mAP50 0、约 24 ms/张。把阈值降到 0.05 后仍没有一个预测框和金标准的 IoU 达到 0.5，打出来的是章内部的小碎片，而不是铺满画面的整枚章。
+
+训练侧补了两种大尺度。`DetDataset` 在训练时有一半概率把画面裁到某一枚章的周围，使章的长边占裁图的 0.62 到 0.98。另外只拿那 156 张训练裁图，按长边占页面的 0.22、0.45、0.72、0.96 贴到 640 像素的纸上，写到 `/home/mayong/rapidstamp/real/user_pages`（624 页）。63 张测试裁图不贴、不进训练。脚本是 `training/scripts/paste_user_seal_pages.py`。
+
+文字仍没有金标准。已发布 CTC 直接读这 63 张裁图，零样本 PP-OCRv5 也读了同一批极坐标条。两条草稿整串一致的是 0 张，最长公共前缀平均不到 1 个字。展开条的目视核对也不能稳定读出环文，所以没有把草稿写进标签。`training/scripts/read_seal_crops.py` 只产生草稿。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。
