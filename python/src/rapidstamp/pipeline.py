@@ -38,9 +38,6 @@ from rapidstamp.labels import (
 )
 
 _GRID_CANDIDATES = ((2, 1), (3, 1), (4, 1), (2, 2))
-# Extra radial bands tried only around the winning angle. The default band
-# stays the one the strips were rendered with.
-_EXTRA_RADIAL_BANDS = ((0.64, 0.94), (0.78, 0.995))
 
 
 def default_model_dir() -> Path:
@@ -186,24 +183,15 @@ class RapidStamp:
         source = pad_to_square(crop, 255) if square else crop
         steps = max(1, self.angle_steps)
         best = ("", -1.0)
-        best_start = self.start_deg
         for step in range(steps):
             start = step * (360.0 / steps)
             text, score = self._recognize(self._unwrap(source, start, self.r_in, self.r_out))
             if score > best[1]:
                 best = (text, score)
-                best_start = start
         # The training distribution is left-aligned near this start. Always try it.
         text, score = self._recognize(self._unwrap(source, self.start_deg, self.r_in, self.r_out))
         if score > best[1]:
             best = (text, score)
-            best_start = self.start_deg
-        step_deg = 360.0 / steps
-        for start in (best_start - step_deg, best_start, best_start + step_deg, self.start_deg):
-            for r_in, r_out in _EXTRA_RADIAL_BANDS:
-                text, score = self._recognize(self._unwrap(source, start, r_in, r_out))
-                if score > best[1]:
-                    best = (text, score)
         return best
 
     def _unwrap(self, source: np.ndarray, start: float, r_in: float, r_out: float) -> np.ndarray:

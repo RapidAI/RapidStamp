@@ -63,30 +63,34 @@ def test_detector_loss_and_recognizer_shape():
     assert 0.0 <= score <= 1.0
 
 
-def test_ctc_score_prefers_the_longer_reading():
-    charset = ["a", "b"]
-    short = np.array(
+def test_ctc_score_depends_on_script():
+    steps = np.array(
         [
-            [0, 8, 0],
-            [8, 0, 0],
-            [8, 0, 0],
-            [8, 0, 0],
+            [0.0, 8.0, 0.0],
+            [8.0, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
         ],
         dtype=np.float32,
     )
     longer = np.array(
         [
-            [0, 3, 0],
-            [0, 0, 3],
-            [4, 0, 0],
-            [4, 0, 0],
+            [0.0, 3.0, 0.0],
+            [0.0, 0.0, 3.0],
+            [4.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
         ],
         dtype=np.float32,
     )
-    short_text, short_score = ctc_greedy(short, charset)
-    long_text, long_score = ctc_greedy(longer, charset)
-    assert short_text == "a"
-    assert long_text == "ab"
+    # Latin uses probability mass over the fixed length, so the longer reading wins.
+    short_text, short_score = ctc_greedy(steps, ["A", "B"])
+    long_text, long_score = ctc_greedy(longer, ["A", "B"])
+    assert short_text == "A" and long_text == "AB"
     assert long_score > short_score
-    assert 0.0 <= short_score <= 1.0
-    assert 0.0 <= long_score <= 1.0
+    # CJK uses the mean of emitted glyphs, so one extra weak character loses.
+    cjk_short, cjk_short_score = ctc_greedy(steps, ["甲", "乙"])
+    cjk_long, cjk_long_score = ctc_greedy(longer, ["甲", "乙"])
+    assert cjk_short == "甲" and cjk_long == "甲乙"
+    assert cjk_short_score > cjk_long_score
+    for score in (short_score, long_score, cjk_short_score, cjk_long_score):
+        assert 0.0 <= score <= 1.0

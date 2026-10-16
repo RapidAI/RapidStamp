@@ -125,10 +125,44 @@ struct rapidstamp_engine {
     std::pair<std::string, float> read_layout(const RsImage& crop, const std::string& layout);
 };
 
+bool contains_cjk(const std::string& text) {
+    for (size_t i = 0; i < text.size();) {
+        auto lead = static_cast<unsigned char>(text[i]);
+        uint32_t code = lead;
+        size_t width = 1;
+        if ((lead & 0x80u) == 0) {
+            width = 1;
+            code = lead;
+        } else if ((lead & 0xE0u) == 0xC0u && i + 1 < text.size()) {
+            width = 2;
+            code = (lead & 0x1Fu) << 6;
+            code |= static_cast<unsigned char>(text[i + 1]) & 0x3Fu;
+        } else if ((lead & 0xF0u) == 0xE0u && i + 2 < text.size()) {
+            width = 3;
+            code = (lead & 0x0Fu) << 12;
+            code |= (static_cast<unsigned char>(text[i + 1]) & 0x3Fu) << 6;
+            code |= static_cast<unsigned char>(text[i + 2]) & 0x3Fu;
+        } else if ((lead & 0xF8u) == 0xF0u && i + 3 < text.size()) {
+            width = 4;
+            code = (lead & 0x07u) << 18;
+            code |= (static_cast<unsigned char>(text[i + 1]) & 0x3Fu) << 12;
+            code |= (static_cast<unsigned char>(text[i + 2]) & 0x3Fu) << 6;
+            code |= static_cast<unsigned char>(text[i + 3]) & 0x3Fu;
+        } else {
+            i += 1;
+            continue;
+        }
+        if (code >= 0x4E00u && code <= 0x9FFFu) return true;
+        i += width;
+    }
+    return false;
+}
+
 std::pair<std::string, float> ctc_greedy(const float* logits, int time_steps, int classes,
                                         const std::vector<std::string>& charset) {
     std::string text;
     float score_sum = 0.f;
+    int score_n = 0;
     int previous = 0;
     for (int t = 0; t < time_steps; ++t) {
         const float* row = logits + static_cast<size_t>(t) * classes;
@@ -149,12 +183,17 @@ std::pair<std::string, float> ctc_greedy(const float* logits, int time_steps, in
             if (index >= 0 && index < static_cast<int>(charset.size())) {
                 text += charset[index];
                 score_sum += prob;
+                score_n += 1;
             }
         }
         previous = best;
     }
-    // Divide by the fixed length so a short confident fragment does not beat a full title.
-    return {text, time_steps > 0 ? score_sum / static_cast<float>(time_steps) : 0.f};
+    if (score_n == 0 || time_steps <= 0) return {text, 0.f};
+    // CJK: mean, so a rotated ring that picks up one extra glyph loses.
+    // Latin and digits: mass over the fixed length, so a short fragment loses.
+    float mean = score_sum / static_cast<float>(score_n);
+    float mass = score_sum / static_cast<float>(time_steps);
+    return {text, contains_cjk(text) ? mean : mass};
 }
 
 std::pair<std::string, float> rapidstamp_engine::recognize(const RsImage& strip_in) {
@@ -192,34 +231,15 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
     RsImage source = layout == "circle" ? pad_to_square(crop, 255) : crop;
     std::pair<std::string, float> best{"", -1.f};
     int steps = std::max(1, config.angle_steps);
-    float best_start = config.start_deg;
     for (int step = 0; step < steps; ++step) {
         float start = step * (360.f / static_cast<float>(steps));
         auto decoded = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
                                               config.span_deg));
-        if (decoded.second > best.second) {
-            best = decoded;
-            best_start = start;
-        }
+        if (decoded.second > best.second) best = decoded;
     }
     auto canonical = recognize(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out,
                                             config.start_deg, config.span_deg));
-    if (canonical.second > best.second) {
-        best = canonical;
-        best_start = config.start_deg;
-    }
-    // Same extra bands as python/src/rapidstamp/pipeline.py. Only the winning
-    // angle and its neighbors are re-read, so this stays a small extra cost.
-    const float extra_bands[2][2] = {{0.64f, 0.94f}, {0.78f, 0.995f}};
-    float step_deg = 360.f / static_cast<float>(steps);
-    const float refine_starts[4] = {best_start - step_deg, best_start, best_start + step_deg, config.start_deg};
-    for (float start : refine_starts) {
-        for (const auto& band : extra_bands) {
-            auto decoded = recognize(polar_unwrap(source, config.rec_w, config.rec_h, band[0], band[1], start,
-                                                  config.span_deg));
-            if (decoded.second > best.second) best = decoded;
-        }
-    }
+    if (canonical.second > best.second) best = canonical;
     return best;
 }
 
