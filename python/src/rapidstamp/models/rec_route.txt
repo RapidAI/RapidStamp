@@ -1,0 +1,13 @@
+# Detection class, then recognizer. Hold-out strip exact chose the reader.
+# square_personal: finetuned PP-OCRv5 135/137, published CTC 0/137.
+# round_official, oval, finance, invoice, company_latin, notary, rect_stamp
+# and the Paddle company-name set stay on CTC. A missing line also means CTC.
+# Box aspect ratio is not used: round and square boxes are both near square.
+square_personal ppocr
+round_official ctc
+oval ctc
+finance ctc
+invoice ctc
+company_latin ctc
+notary ctc
+rect_stamp ctc

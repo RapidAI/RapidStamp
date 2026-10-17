@@ -37,9 +37,23 @@ from rapidstamp.labels import (
     UNWRAP_R_OUT,
     UNWRAP_START_DEG,
     load_preprocess,
+    load_rec_route,
+    routed_reader,
 )
 
 _GRID_CANDIDATES = ((2, 1), (3, 1), (4, 1), (2, 2))
+
+
+class _Reader:
+    def __init__(self, session, charset: list[str], name: str) -> None:
+        self.session = session
+        self.charset = charset
+        self.name = name
+        rec_input = session.get_inputs()[0]
+        self.input_name = rec_input.name
+        shape = rec_input.shape
+        self.channels = int(shape[1]) if len(shape) > 1 and isinstance(shape[1], int) and shape[1] > 0 else 1
+        self.ppocr_h = int(shape[2]) if len(shape) > 2 and isinstance(shape[2], int) and shape[2] > 0 else 48
 
 
 def default_model_dir() -> Path:
@@ -114,11 +128,18 @@ class RapidStamp:
             self.charset = _read_lines(directory / charset_file)
         self.det = ort.InferenceSession(str(directory / "seal_det.onnx"), sess_options=opts, providers=chosen)
         self.rec = ort.InferenceSession(str(directory / rec_file), sess_options=opts, providers=chosen)
-        rec_input = self.rec.get_inputs()[0]
-        self.rec_input_name = rec_input.name
-        shape = rec_input.shape
-        self.rec_channels = int(shape[1]) if len(shape) > 1 and isinstance(shape[1], int) and shape[1] > 0 else 1
-        self.ppocr_h = int(shape[2]) if len(shape) > 2 and isinstance(shape[2], int) and shape[2] > 0 else 48
+        self._ctc = _Reader(self.rec, self.charset, "ctc")
+        self.rec_input_name = self._ctc.input_name
+        self.rec_channels = self._ctc.channels
+        self.ppocr_h = self._ctc.ppocr_h
+        self._ppocr: _Reader | None = None
+        ppocr_model = directory / "seal_rec_ppocr.onnx"
+        ppocr_charset_path = directory / "charset_ppocr.txt"
+        ppocr_charset = _read_lines(ppocr_charset_path)
+        if ppocr_model.is_file() and ppocr_charset:
+            ppocr_session = ort.InferenceSession(str(ppocr_model), sess_options=opts, providers=chosen)
+            self._ppocr = _Reader(ppocr_session, ppocr_charset, "ppocr")
+        self.route = load_rec_route(str(directory / "rec_route.txt"))
 
     def __call__(self, image: str | Path | np.ndarray | Image.Image) -> list[Seal]:
         rgb = _to_rgb(image)
@@ -161,10 +182,10 @@ class RapidStamp:
             name = self.class_names[class_id] if class_id < len(self.class_names) else str(class_id)
             layout = self.layouts.get(name, "circle")
             crop = rgb[y1:y2, x1:x2]
-            text, text_score = self._read(crop, layout)
+            text, text_score = self._read(crop, layout, name)
             center = ""
             if name == "invoice":
-                center, _center_score = self._read_center(crop)
+                center, _center_score = self._read_center(crop, name)
             results.append(
                 Seal(
                     float(rect[0]),
@@ -181,19 +202,26 @@ class RapidStamp:
             )
         return results
 
-    def _read(self, crop: np.ndarray, layout: str) -> tuple[str, float]:
+    def _reader(self, class_name: str) -> _Reader:
+        if routed_reader(self.route, class_name, self._ppocr is not None) == "ppocr":
+            assert self._ppocr is not None
+            return self._ppocr
+        return self._ctc
+
+    def _read(self, crop: np.ndarray, layout: str, class_name: str = "") -> tuple[str, float]:
+        reader = self._reader(class_name)
         if layout == "hline":
-            return self._recognize(hline_band(crop, self.rec_h, self.rec_w))
+            return self._recognize(hline_band(crop, self.rec_h, self.rec_w), reader)
         if layout == "grid":
             strips = [grid_unroll(crop, rows, cols, self.rec_h, self.rec_w) for rows, cols in _GRID_CANDIDATES]
-            decoded = self._recognize_many(strips)
+            decoded = self._recognize_many(strips, reader)
             best = ("", -1.0)
             for (rows, cols), (text, score) in zip(_GRID_CANDIDATES, decoded):
                 # A layout that emits one glyph per cell beats a shorter fragment.
                 penalty = 0.05 * abs(len(text) - rows * cols)
                 best = prefer_reading(best, (text, score - penalty))
             return best
-        return self._read_arc(crop, square=layout == "circle")
+        return self._read_arc(crop, square=layout == "circle", reader=reader)
 
     def _arc_starts(self, source: np.ndarray) -> list[float]:
         """Eight unwraps, 45° apart.
@@ -218,11 +246,11 @@ class RapidStamp:
             unique.append(start)
         return unique
 
-    def _read_arc(self, crop: np.ndarray, square: bool) -> tuple[str, float]:
+    def _read_arc(self, crop: np.ndarray, square: bool, reader: _Reader) -> tuple[str, float]:
         source = pad_to_square(crop, 255) if square else crop
         starts = self._arc_starts(source)
         strips = [self._unwrap(source, start, self.r_in, self.r_out) for start in starts]
-        decoded = self._recognize_many(strips)
+        decoded = self._recognize_many(strips, reader)
         best = ("", -1.0)
         for text, score in decoded:
             best = prefer_reading(best, (text, score))
@@ -238,41 +266,45 @@ class RapidStamp:
             start_deg=start,
         )
 
-    def _read_center(self, crop: np.ndarray) -> tuple[str, float]:
+    def _read_center(self, crop: np.ndarray, class_name: str = "invoice") -> tuple[str, float]:
         height, width = crop.shape[:2]
         band = crop[int(height * 0.36) : int(height * 0.68), int(width * 0.16) : int(width * 0.84)]
         if band.size == 0:
             return "", 0.0
-        text, score = self._recognize(resize_bilinear(band, self.rec_w, self.rec_h))
+        text, score = self._recognize(resize_bilinear(band, self.rec_w, self.rec_h), self._reader(class_name))
         digits = "".join(ch for ch in text if ch.isdigit())
         if len(digits) >= 8:
             return digits, score
         return "", 0.0
 
-    def _recognize(self, strip: np.ndarray) -> tuple[str, float]:
-        return self._recognize_many([strip])[0]
+    def _recognize(self, strip: np.ndarray, reader: _Reader | None = None) -> tuple[str, float]:
+        return self._recognize_many([strip], reader)[0]
 
     def _fit_strip(self, strip: np.ndarray) -> np.ndarray:
         if strip.shape[0] != self.rec_h or strip.shape[1] != self.rec_w:
             return resize_bilinear(strip, self.rec_w, self.rec_h)
         return strip
 
-    def _recognize_many(self, strips: list[np.ndarray]) -> list[tuple[str, float]]:
+    def _recognize_many(self, strips: list[np.ndarray], reader: _Reader | None = None) -> list[tuple[str, float]]:
+        # No reader means the primary CTC session. Strip scorers call this
+        # without a class, and that path must stay on CTC after routing files
+        # are added beside it.
+        chosen = reader or self._ctc
         if not strips:
             return []
         fitted = [self._fit_strip(strip) for strip in strips]
-        if self.rec_channels == 3:
-            batch = np.stack([ppocr_nchw(strip, self.ppocr_h) for strip in fitted], axis=0)
+        if chosen.channels == 3:
+            batch = np.stack([ppocr_nchw(strip, chosen.ppocr_h) for strip in fitted], axis=0)
         else:
             batch = np.stack([to_gray01(strip).astype(np.float32) for strip in fitted], axis=0)[:, None]
-        outputs = self.rec.run(None, {self.rec_input_name: batch})
+        outputs = chosen.session.run(None, {chosen.input_name: batch})
         logits = outputs[0]
-        classes = len(self.charset) + 1
+        classes = len(chosen.charset) + 1
         for output in outputs:
             if getattr(output, "ndim", 0) >= 2 and int(output.shape[-1]) == classes:
                 logits = output
                 break
-        return [ctc_greedy(row, self.charset) for row in logits]
+        return [ctc_greedy(row, chosen.charset) for row in logits]
 
 
 def _read_lines(path: Path) -> list[str]:

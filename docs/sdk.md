@@ -1,8 +1,8 @@
 # C/C++ SDK 与 Python 包
 
-推理用两个 ONNX：`seal_det.onnx`（印章实例检测）和 `seal_rec.onnx`（展开后的文字识别）。几何后处理（letterbox、极坐标展开、方章切格、NMS、CTC 贪心解码）在 SDK 里完成，不放进计算图，方便各平台共用同一对模型。
+推理用检测 ONNX `seal_det.onnx`，再按印章类别把展开后的文字交给两个识别器之一。`seal_rec.onnx` 是灰度 CTC。`seal_rec_ppocr.onnx` 是微调后的 PP-OCRv5 mobile rec，配 `charset_ppocr.txt`。`rec_route.txt` 写明每个检测类别走哪一个。现在只有 `square_personal` 走 PP-OCRv5，其余类别走 CTC。几何后处理（letterbox、极坐标展开、方章切格、NMS、CTC 贪心解码）在 SDK 里完成，不放进计算图。
 
-识别器按 ONNX 输入自己分支，Python 和 C++ 同一套规则。1 通道是灰度 CTC，条带缩到 32×384，输入名一般是 `image`。3 通道是 PP-OCRv5 那种文档识别：先缩到高 48、宽按比例且不超过 3200，再转 BGR，做 `(x/255-0.5)/0.5`。输出取最后一维等于字表长度加 1 的那个张量，空白仍是 index 0。`RapidStamp(..., fast=True)` 改读同目录的 `seal_rec_fast.onnx` 和 `charset_fast.txt`，这是轻量 CTC 的快速模式。C API 不增加参数，调用方把要跑的识别模型和字表路径传进来即可。
+识别器按 ONNX 输入自己分支，Python 和 C++ 同一套规则。1 通道是灰度 CTC，条带缩到 32×384，输入名一般是 `image`。3 通道是 PP-OCRv5：先缩到高 48、宽按比例且不超过 3200，再转 BGR，做 `(x/255-0.5)/0.5`。输出取最后一维等于字表长度加 1 的那个张量，空白仍是 index 0。同一枚章的所有条带，包括发票中心数字，走这枚章的检测类别对应的那个识别器。框的长宽比不参与分流，圆章和方章的框都接近正方形。`RapidStamp(..., fast=True)` 只替换主 CTC 文件（`seal_rec_fast.onnx`、`charset_fast.txt`），旁边的 PP-OCRv5 和 `rec_route.txt` 仍按类别生效。C API 不增加参数：`rapidstamp_create` 仍是检测模型、CTC 模型和 CTC 字表三个路径。字表所在目录里若有 `seal_rec_ppocr.onnx`、`charset_ppocr.txt` 和 `rec_route.txt` 就加载第二路；缺任何一个则全部走 CTC。
 
 运行时数值合同在 `preprocess.txt`。Python 与 C++ 都读这个文件。默认值和 `cpp/src/constants.h`、`python/src/rapidstamp/labels.py` 一致。
 

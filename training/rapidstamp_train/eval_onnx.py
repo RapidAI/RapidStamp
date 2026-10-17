@@ -46,16 +46,32 @@ def _iou(a, b) -> float:
     return inter / (area_a + area_b - inter + 1e-6)
 
 
+def _class_by_strip(root: Path) -> dict[str, str]:
+    found: dict[str, str] = {}
+    label_dir = root / "det" / "val" / "labels"
+    if not label_dir.is_dir():
+        return found
+    for path in label_dir.glob("*.json"):
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        for ordinal, seal in enumerate(meta.get("seals") or []):
+            name = str(seal.get("name") or "")
+            found[f"{path.stem}_{ordinal}.png"] = name
+            found[f"{path.stem}_{ordinal}c.png"] = name
+    return found
+
+
 def _rec_exact(root: Path, engine: RapidStamp) -> dict:
     rows = (root / "rec" / "val" / "labels.tsv").read_text(encoding="utf-8").splitlines()
+    classes = _class_by_strip(root)
     groups = {"seal": [0, 0], "center": [0, 0], "plain": [0, 0]}
     by_prefix: dict[str, list[int]] = {}
+    by_class: dict[str, list[int]] = {}
     for line in rows:
         if not line.strip():
             continue
         name, text = line.split("\t", 1)
         image = np.asarray(Image.open(root / "rec" / "val" / "images" / name).convert("RGB"))
-        pred, _score = engine._recognize(image)
+        pred, _score = engine._recognize(image, engine._reader(classes.get(name, "")))
         key = "plain" if "_p" in name else "center" if name.endswith("c.png") or "_c." in name else "seal"
         # center files are "{id}_{ord}c.png"
         if name.endswith("c.png"):
@@ -68,9 +84,18 @@ def _rec_exact(root: Path, engine: RapidStamp) -> dict:
             bucket = by_prefix.setdefault(prefix, [0, 0])
             bucket[1] += 1
             bucket[0] += hit
+            class_name = classes.get(name, "")
+            if class_name:
+                class_bucket = by_class.setdefault(class_name, [0, 0])
+                class_bucket[1] += 1
+                class_bucket[0] += hit
     out = {}
     for key, (hit, total) in groups.items():
         out[key] = {"exact": hit / total if total else 0.0, "n": total}
+    out["by_class"] = {
+        name: {"exact": hit / total if total else 0.0, "n": total}
+        for name, (hit, total) in sorted(by_class.items())
+    }
     out["by_prefix"] = {
         prefix: {"exact": hit / total if total else 0.0, "n": total}
         for prefix, (hit, total) in sorted(by_prefix.items())

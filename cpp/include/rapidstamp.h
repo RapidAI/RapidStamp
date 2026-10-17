@@ -37,6 +37,10 @@ typedef struct rapidstamp_config {
 /* Zeros select the values in preprocess.txt, or the built-in defaults. */
 rapidstamp_config rapidstamp_default_config(void);
 
+/* rec_model_path + charset_path is the CTC recognizer.
+   If seal_rec_ppocr.onnx, charset_ppocr.txt and rec_route.txt sit beside
+   charset_path, classes marked ppocr in that file use the second model.
+   Missing siblings leave every class on CTC. The argument list stays four. */
 rapidstamp_engine* rapidstamp_create(const char* det_model_path,
                                      const char* rec_model_path,
                                      const char* charset_path,

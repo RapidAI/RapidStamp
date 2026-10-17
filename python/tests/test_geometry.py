@@ -29,6 +29,21 @@ def test_ppocr_tensor_is_bgr_centered():
     assert tensor[2, 0, 0] > 0
 
 
+def test_rec_route_parser_matches_the_cpp_fixture():
+    from rapidstamp.labels import load_rec_route, routed_reader
+
+    route = load_rec_route(text="square_personal ppocr\nround_official ctc\n# comment\noval\nbad nope\n")
+    assert route == {"square_personal": "ppocr", "round_official": "ctc", "oval": "ppocr"}
+    assert routed_reader(route, "square_personal", True) == "ppocr"
+    assert routed_reader(route, "round_official", True) == "ctc"
+    assert routed_reader(route, "oval", False) == "ctc"
+    assert routed_reader(route, "finance", True) == "ctc"
+    published = load_rec_route("models/rec_route.txt")
+    assert published.get("square_personal") == "ppocr"
+    assert published.get("round_official") == "ctc"
+    assert published.get("company_latin") == "ctc"
+
+
 def test_constants_match_cpp_header():
     text = open("cpp/src/constants.h", encoding="utf-8").read()
     assert f"kDetSize = {DET_SIZE}" in text

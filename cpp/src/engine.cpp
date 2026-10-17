@@ -1,6 +1,7 @@
 #include "rapidstamp.h"
 
 #include "geometry.h"
+#include "route.h"
 
 #include <onnxruntime_cxx_api.h>
 
@@ -13,6 +14,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -111,24 +113,30 @@ void copy_text(char* dst, int cap, const std::string& text) {
 
 }  // namespace
 
+struct RecHead {
+    std::unique_ptr<Ort::Session> session;
+    std::vector<std::string> charset;
+    int channels = 1;
+    int ppocr_h = 48;
+    std::string input_name = "image";
+    std::string output_name = "logits";
+};
+
 struct rapidstamp_engine {
     Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "rapidstamp"};
     std::unique_ptr<Ort::Session> det;
-    std::unique_ptr<Ort::Session> rec;
-    std::vector<std::string> charset;
+    RecHead ctc;
+    RecHead ppocr;
+    std::unordered_map<std::string, std::string> route;
     std::vector<std::string> classes;
     RuntimeConfig config;
     int threads = 4;
     std::mutex mutex;
 
-    int rec_channels = 1;
-    int ppocr_h = 48;
-    std::string rec_input_name = "image";
-    std::string rec_output_name = "logits";
-
-    std::pair<std::string, float> recognize(const RsImage& strip);
-    std::vector<std::pair<std::string, float>> recognize_many(const std::vector<RsImage>& strips);
-    std::pair<std::string, float> read_layout(const RsImage& crop, const std::string& layout);
+    RecHead& reader_for(const std::string& class_name);
+    std::pair<std::string, float> recognize(const RsImage& strip, RecHead& head);
+    std::vector<std::pair<std::string, float>> recognize_many(const std::vector<RsImage>& strips, RecHead& head);
+    std::pair<std::string, float> read_layout(const RsImage& crop, const std::string& layout, const std::string& class_name);
 };
 
 bool contains_cjk(const std::string& text) {
@@ -237,13 +245,20 @@ std::pair<std::string, float> prefer_reading(const std::pair<std::string, float>
     return candidate.second >= current.second ? candidate : current;
 }
 
-std::pair<std::string, float> rapidstamp_engine::recognize(const RsImage& strip_in) {
-    auto rows = recognize_many({strip_in});
+RecHead& rapidstamp_engine::reader_for(const std::string& class_name) {
+    auto found = route.find(class_name);
+    if (found != route.end() && found->second == "ppocr" && ppocr.session) return ppocr;
+    return ctc;
+}
+
+std::pair<std::string, float> rapidstamp_engine::recognize(const RsImage& strip_in, RecHead& head) {
+    auto rows = recognize_many({strip_in}, head);
     if (rows.empty()) return {"", 0.f};
     return rows[0];
 }
 
-std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(const std::vector<RsImage>& strips_in) {
+std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(const std::vector<RsImage>& strips_in,
+                                                                            RecHead& head) {
     std::vector<std::pair<std::string, float>> decoded;
     if (strips_in.empty()) return decoded;
     std::vector<RsImage> strips;
@@ -258,9 +273,9 @@ std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(con
     const int batch = static_cast<int>(strips.size());
     std::vector<float> input;
     std::array<int64_t, 4> shape{batch, 1, config.rec_h, config.rec_w};
-    if (rec_channels == 3) {
+    if (head.channels == 3) {
         // Same rounding as python rapidstamp.rec_preproc.ppocr_width.
-        int height = ppocr_h > 0 ? ppocr_h : 48;
+        int height = head.ppocr_h > 0 ? head.ppocr_h : 48;
         int width = static_cast<int>(std::lround(static_cast<double>(height) * config.rec_w / std::max(1, config.rec_h)));
         width = std::max(8, std::min(3200, width));
         shape = std::array<int64_t, 4>{batch, 3, height, width};
@@ -294,9 +309,9 @@ std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(con
     }
     Ort::MemoryInfo memory = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     Ort::Value tensor = Ort::Value::CreateTensor<float>(memory, input.data(), input.size(), shape.data(), shape.size());
-    const char* in_names[] = {rec_input_name.c_str()};
-    const char* out_names[] = {rec_output_name.c_str()};
-    auto outputs = rec->Run(Ort::RunOptions{nullptr}, in_names, &tensor, 1, out_names, 1);
+    const char* in_names[] = {head.input_name.c_str()};
+    const char* out_names[] = {head.output_name.c_str()};
+    auto outputs = head.session->Run(Ort::RunOptions{nullptr}, in_names, &tensor, 1, out_names, 1);
     auto dims = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
     int time_steps = static_cast<int>(dims.size() >= 2 ? dims[dims.size() - 2] : dims[0]);
     int nclass = static_cast<int>(dims.back());
@@ -304,13 +319,15 @@ std::vector<std::pair<std::string, float>> rapidstamp_engine::recognize_many(con
     decoded.reserve(strips.size());
     for (int index = 0; index < batch; ++index) {
         const float* row = logits + static_cast<size_t>(index) * time_steps * nclass;
-        decoded.push_back(ctc_greedy(row, time_steps, nclass, charset));
+        decoded.push_back(ctc_greedy(row, time_steps, nclass, head.charset));
     }
     return decoded;
 }
 
-std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop, const std::string& layout) {
-    if (layout == "hline") return recognize(hline_band(crop, config.rec_h, config.rec_w));
+std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop, const std::string& layout,
+                                                             const std::string& class_name) {
+    RecHead& head = reader_for(class_name);
+    if (layout == "hline") return recognize(hline_band(crop, config.rec_h, config.rec_w), head);
     if (layout == "grid") {
         const int grids[4][2] = {{2, 1}, {3, 1}, {4, 1}, {2, 2}};
         std::vector<RsImage> strips;
@@ -318,7 +335,7 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
         for (const auto& item : grids) {
             strips.push_back(grid_unroll(crop, item[0], item[1], config.rec_h, config.rec_w));
         }
-        auto decoded = recognize_many(strips);
+        auto decoded = recognize_many(strips, head);
         std::pair<std::string, float> best{"", -1.f};
         for (size_t index = 0; index < decoded.size(); ++index) {
             float penalty = 0.05f * std::abs(utf8_len(decoded[index].first) - grids[index][0] * grids[index][1]);
@@ -353,7 +370,7 @@ std::pair<std::string, float> rapidstamp_engine::read_layout(const RsImage& crop
         strips.push_back(polar_unwrap(source, config.rec_w, config.rec_h, config.r_in, config.r_out, start,
                                       config.span_deg));
     }
-    auto decoded = recognize_many(strips);
+    auto decoded = recognize_many(strips, head);
     std::pair<std::string, float> best{"", -1.f};
     for (const auto& item : decoded) best = prefer_reading(best, item);
     return best;
@@ -368,6 +385,42 @@ rapidstamp_config rapidstamp_default_config(void) {
     return config;
 }
 
+static bool file_readable(const std::string& path) {
+    std::ifstream input(path);
+    return static_cast<bool>(input);
+}
+
+static void bind_reader(RecHead& head) {
+    Ort::AllocatorWithDefaultOptions allocator;
+    head.input_name = head.session->GetInputNameAllocated(0, allocator).get();
+    auto in_shape = head.session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+    head.channels = 1;
+    head.ppocr_h = 48;
+    if (in_shape.size() >= 2 && in_shape[1] > 0) head.channels = static_cast<int>(in_shape[1]);
+    if (in_shape.size() >= 3 && in_shape[2] > 0) head.ppocr_h = static_cast<int>(in_shape[2]);
+    int output_index = 0;
+    int output_rank = -1;
+    const int wanted = static_cast<int>(head.charset.size()) + 1;
+    for (size_t index = 0; index < head.session->GetOutputCount(); ++index) {
+        auto out_shape = head.session->GetOutputTypeInfo(index).GetTensorTypeAndShapeInfo().GetShape();
+        int last = out_shape.empty() ? 0 : static_cast<int>(out_shape.back());
+        int rank = last == wanted ? 2 : (index == 0 ? 1 : 0);
+        if (rank > output_rank) {
+            output_rank = rank;
+            output_index = static_cast<int>(index);
+        }
+    }
+    head.output_name = head.session->GetOutputNameAllocated(output_index, allocator).get();
+}
+
+static std::unique_ptr<Ort::Session> open_session(Ort::Env& env, const std::string& path, const Ort::SessionOptions& options) {
+#ifdef _WIN32
+    return std::make_unique<Ort::Session>(env, widen(path).c_str(), options);
+#else
+    return std::make_unique<Ort::Session>(env, path.c_str(), options);
+#endif
+}
+
 rapidstamp_engine* rapidstamp_create(const char* det_model_path, const char* rec_model_path, const char* charset_path,
                                      const rapidstamp_config* config) {
     if (!det_model_path || !rec_model_path || !charset_path) {
@@ -376,8 +429,8 @@ rapidstamp_engine* rapidstamp_create(const char* det_model_path, const char* rec
     }
     try {
         auto* engine = new rapidstamp_engine();
-        engine->charset = read_lines(charset_path);
-        if (engine->charset.empty()) {
+        engine->ctc.charset = read_lines(charset_path);
+        if (engine->ctc.charset.empty()) {
             set_error("charset is empty");
             delete engine;
             return nullptr;
@@ -394,31 +447,22 @@ rapidstamp_engine* rapidstamp_create(const char* det_model_path, const char* rec
         Ort::SessionOptions options;
         options.SetIntraOpNumThreads(engine->threads);
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-#ifdef _WIN32
-        engine->det = std::make_unique<Ort::Session>(engine->env, widen(det_model_path).c_str(), options);
-        engine->rec = std::make_unique<Ort::Session>(engine->env, widen(rec_model_path).c_str(), options);
-#else
-        engine->det = std::make_unique<Ort::Session>(engine->env, det_model_path, options);
-        engine->rec = std::make_unique<Ort::Session>(engine->env, rec_model_path, options);
-#endif
-        Ort::AllocatorWithDefaultOptions allocator;
-        engine->rec_input_name = engine->rec->GetInputNameAllocated(0, allocator).get();
-        auto in_shape = engine->rec->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-        if (in_shape.size() >= 2 && in_shape[1] > 0) engine->rec_channels = static_cast<int>(in_shape[1]);
-        if (in_shape.size() >= 3 && in_shape[2] > 0) engine->ppocr_h = static_cast<int>(in_shape[2]);
-        int output_index = 0;
-        int output_rank = -1;
-        const int wanted = static_cast<int>(engine->charset.size()) + 1;
-        for (size_t index = 0; index < engine->rec->GetOutputCount(); ++index) {
-            auto out_shape = engine->rec->GetOutputTypeInfo(index).GetTensorTypeAndShapeInfo().GetShape();
-            int last = out_shape.empty() ? 0 : static_cast<int>(out_shape.back());
-            int rank = last == wanted ? 2 : (index == 0 ? 1 : 0);
-            if (rank > output_rank) {
-                output_rank = rank;
-                output_index = static_cast<int>(index);
+        engine->det = open_session(engine->env, det_model_path, options);
+        engine->ctc.session = open_session(engine->env, rec_model_path, options);
+        bind_reader(engine->ctc);
+        std::string ppocr_path = dir + "/seal_rec_ppocr.onnx";
+        std::string ppocr_charset_path = dir + "/charset_ppocr.txt";
+        if (file_readable(ppocr_path) && file_readable(ppocr_charset_path)) {
+            engine->ppocr.charset = read_lines(ppocr_charset_path);
+            if (!engine->ppocr.charset.empty()) {
+                engine->ppocr.session = open_session(engine->env, ppocr_path, options);
+                bind_reader(engine->ppocr);
+                std::ifstream route_file(dir + "/rec_route.txt");
+                std::stringstream buffer;
+                buffer << route_file.rdbuf();
+                engine->route = parse_rec_route(buffer.str());
             }
         }
-        engine->rec_output_name = engine->rec->GetOutputNameAllocated(output_index, allocator).get();
         g_error.clear();
         return engine;
     } catch (const std::exception& ex) {
@@ -494,7 +538,7 @@ int rapidstamp_infer(rapidstamp_engine* engine, const uint8_t* rgb, int width, i
             std::string name = det.class_id >= 0 && det.class_id < static_cast<int>(engine->classes.size())
                                    ? engine->classes[det.class_id]
                                    : "";
-            auto decoded = engine->read_layout(crop, layout_of(engine->config, name));
+            auto decoded = engine->read_layout(crop, layout_of(engine->config, name), name);
             rapidstamp_seal& slot = out_seals[written++];
             std::memset(&slot, 0, sizeof(slot));
             slot.x1 = x1;
@@ -519,7 +563,8 @@ int rapidstamp_infer(rapidstamp_engine* engine, const uint8_t* rgb, int width, i
                     for (int y = 0; y < band.height; ++y) {
                         std::copy(crop.pixel(cx1, cy1 + y), crop.pixel(cx1, cy1 + y) + band.width * 3, band.pixel(0, y));
                     }
-                    auto center = engine->recognize(resize_bilinear(band, engine->config.rec_w, engine->config.rec_h));
+                    auto center = engine->recognize(resize_bilinear(band, engine->config.rec_w, engine->config.rec_h),
+                                                    engine->reader_for(name));
                     std::string digits;
                     for (char ch : center.first) {
                         if (ch >= '0' && ch <= '9') digits.push_back(ch);

@@ -46,6 +46,46 @@ def class_id(name: str) -> int:
     return CLASS_NAMES.index(name)
 
 
+def load_rec_route(path: str | None = None, text: str | None = None) -> dict[str, str]:
+    """Class name -> ``ppocr`` or ``ctc``.
+
+    Same line rules as ``cpp/src/route.h``: ``#`` comments, a bare class name
+    means the finetuned PP-OCRv5 reader, any other reader token is skipped.
+    Missing file means every class stays on the CTC recognizer.
+    """
+    if text is None:
+        if not path:
+            return {}
+        try:
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+        except OSError:
+            return {}
+    route: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        reader = parts[1] if len(parts) > 1 else "ppocr"
+        if reader not in {"ppocr", "ctc"}:
+            continue
+        route[parts[0]] = reader
+    return route
+
+
+def routed_reader(route: dict[str, str], class_name: str, ppocr_available: bool) -> str:
+    """Which recognizer reads this detection class.
+
+    Aspect ratio is not a fallback. Round and square boxes are both near
+    square, so the detector class is the only key. An unlisted class, or a
+    class whose reader file is absent, stays on CTC.
+    """
+    if route.get(class_name) == "ppocr" and ppocr_available:
+        return "ppocr"
+    return "ctc"
+
+
 def write_preprocess(path: str) -> None:
     """Flat runtime contract. C++ and Python both load this file."""
     lines = [

@@ -1,4 +1,5 @@
 #include "geometry.h"
+#include "route.h"
 
 #include <cmath>
 #include <fstream>
@@ -23,6 +24,12 @@ bool load_ints(std::istream& input, std::vector<int>& values, int count) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    auto route = parse_rec_route("square_personal ppocr\nround_official ctc\n# comment\noval\nbad nope\n");
+    if (route["square_personal"] != "ppocr" || route["round_official"] != "ctc" || route["oval"] != "ppocr" ||
+        route.count("bad") != 0) {
+        std::cerr << "rec route parse mismatch\n";
+        return 1;
+    }
     const char* path = argc > 1 ? argv[1] : "testdata/unwrap_golden.txt";
     std::ifstream input(path);
     if (!input) {
