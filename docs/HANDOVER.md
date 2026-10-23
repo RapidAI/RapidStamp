@@ -53,13 +53,13 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 
 | Archive | Parts | Bytes | Files | Received |
 | --- | --- | --- | --- | --- |
-| `a1_meta.tar` | 20 | 442,204,160 | 1,124 | 000–001, sha256 checked on the server |
+| `a1_meta.tar` | 20 | 442,204,160 | 1,124 | 000–003, sha256 checked on the server |
 | `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | none |
 | `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | none |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
 | `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
 
-`a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. The trainer was left running while 000 and 001 were copied.
+`a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. The trainer was left running while 000–003 were copied.
 
 ## Datasets
 
