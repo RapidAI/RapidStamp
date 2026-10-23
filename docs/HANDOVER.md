@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T05:41:52Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T05:43:30Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -28,7 +28,7 @@ Inventory taken 2026-10-23T05:37:44Z. Sizes are `du -sh`. File counts are recurs
 
 | Path | Size | What is there |
 | --- | --- | --- |
-| `/home/rapidstamp_data/backup` | 651M | `gold_db18.zip` (16,362,139 bytes), `web_seals_cn_all.zip` (385,220,370), `web_seals_delta_v2.zip` (263,497,928), and `gold_seals/seals_to_label/` (63 png + `labels.csv`, 64 files). |
+| `/home/rapidstamp_data/backup` | 651M plus the incoming full backup | `gold_db18.zip` (16,362,139 bytes), `web_seals_cn_all.zip` (385,220,370), `web_seals_delta_v2.zip` (263,497,928), and `gold_seals/seals_to_label/` (63 png + `labels.csv`, 64 files). `full_v1/` is a second backup that started landing on 2026-10-23; see below. The 651M figure is from before those parts. |
 | `/home/rapidstamp_data/checkpoints` | 6.7G | `parseq_reader/`, `ring_baseline/` (75 files), `ring_v2/` (partial, killed), `seal_reader/`. |
 | `/home/rapidstamp_data/gold` | 20M | `seals_to_label/` (63 png + `labels.csv`), `baseline_strips/` (63 strips), `baseline_report/gold_report.json`. |
 | `/home/rapidstamp_data/incoming_v2` | 503M | `delta.zip` (263,497,928) and `part_00.zip` … `part_11.zip` (parts 00–10 are 23,068,672 each, part 11 is 9,742,536). Keep them. |
@@ -46,6 +46,20 @@ There is no `docs/` on the server until this handover is mirrored. PyTorch is no
 Fonts under `pretrained/fonts/`: `NotoSansCJKsc-Regular.otf` (Hei, 16,437,364), `NotoSerifCJKsc-Regular.otf` (Song, 24,543,080), `LXGWWenKaiGBLite-Regular.ttf` (Kai, 14,191,220), `zhuque/ZhuqueFangsong-Regular.ttf` (仿宋, 8,824,084) and `zhuque.zip`.
 
 `web_seals_cn_all/SHA256SUMS.txt` records `347286fe8a4fab9f9c8f3c568d9c31efc07376149def009bafbdace1948f7789` for the zip, with a `/workspace/...` path from the machine that packed it.
+
+### Full box backup, in progress
+
+A second copy of the collection box is arriving as five plain tar archives, split into raw parts whose names end in `.zip` only so the attachment filter accepts them. Do not unzip a part. Manifest at `/home/rapidstamp_data/backup/full_v1/MANIFEST.txt` (2026-10-23 13:33:20 UTC+8). Checksums at `full_v1/SHA256SUMS.txt`. Parts land in `full_v1/parts/`. When the last part of an archive is in, `cat` them in order to `full_v1/<archive>.tar`, check the tar sha256, and extract into `/home/rapidstamp_data/raw_box_backup/`. APPCODEs in the source were already replaced with the placeholder `${ALIYUN_APPCODE}`.
+
+| Archive | Parts | Bytes | Files | Received |
+| --- | --- | --- | --- | --- |
+| `a1_meta.tar` | 20 | 442,204,160 | 1,124 | 000–001, sha256 checked on the server |
+| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | none |
+| `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | none |
+| `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
+| `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
+
+`a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. The trainer was left running while 000 and 001 were copied.
 
 ## Datasets
 
