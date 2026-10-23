@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T06:38:32Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T06:39:32Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -54,7 +54,7 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 | Archive | Parts | Bytes | Files | Received |
 | --- | --- | --- | --- | --- |
 | `a1_meta.tar` | 20 | 442,204,160 | 1,124 | complete. Tar sha256 `f2556116d5aa80cdd48af47887a72a40274fff0d398de67620c711b0da25f0dc`. Extracted. |
-| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | 000–027, sha256 checked on the server. |
+| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | 000–029, sha256 checked on the server. |
 | `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | none |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
 | `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
@@ -123,7 +123,7 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T06:38:32Z (PID 52706): seen 479,200, loss 5.492, 110.5 img/s. Eval so far (1−NED). Latest val exact is 31/344 at 475,008, down from 32/344 at 450,016. Gold exact is still 0/63. Val exact dipped from 16/344 at 400,000 to 13/344 at 425,024, then rose to 32 before this step.
+Pretraining snapshot, job still running, log tail at 2026-10-23T06:39:32Z (PID 52706): seen 485,824, loss 5.461, 110.5 img/s. Eval so far (1−NED). Latest val exact is 31/344 at 475,008, down from 32/344 at 450,016. Gold exact is still 0/63. Val exact dipped from 16/344 at 400,000 to 13/344 at 425,024, then rose to 32 before that step.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
