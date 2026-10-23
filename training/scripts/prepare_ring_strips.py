@@ -201,7 +201,8 @@ def main() -> None:
     rng.shuffle(narrow)
     chosen = (wide[:8] + narrow[:8])[:16]
     if len(chosen) < 16:
-        rest = [item for item in sheet_pool if item not in chosen]
+        chosen_ids = {id(item) for item in chosen}
+        rest = [item for item in sheet_pool if id(item) not in chosen_ids]
         rng.shuffle(rest)
         chosen.extend(rest[: 16 - len(chosen)])
     sheet_path = out / "sample_sheet.jpg"
