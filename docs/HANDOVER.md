@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T06:42:10Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T06:45:46Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -54,7 +54,7 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 | Archive | Parts | Bytes | Files | Received |
 | --- | --- | --- | --- | --- |
 | `a1_meta.tar` | 20 | 442,204,160 | 1,124 | complete. Tar sha256 `f2556116d5aa80cdd48af47887a72a40274fff0d398de67620c711b0da25f0dc`. Extracted. |
-| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | 000–035, sha256 checked on the server. |
+| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | 000–037, sha256 checked on the server. |
 | `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | none |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
 | `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
@@ -123,7 +123,7 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T06:42:10Z (PID 52706): seen 503,200, loss 5.385, 110.5 img/s. Eval so far (1−NED). Latest val exact is 32/344 at 500,000, matching the earlier peak at 450,016 after a dip to 31/344 at 475,008. Gold exact is still 0/63.
+Pretraining snapshot, job still running, log tail at 2026-10-23T06:45:46Z (PID 52706): seen 527,200, loss 5.287, 110.5 img/s. Eval so far (1−NED). Latest val exact is 25/344 at 525,024, down from 32/344 at 500,000. Gold exact is still 0/63. The 500,000 row still wins `(exact, 1−NED)`.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
@@ -147,8 +147,9 @@ Pretraining snapshot, job still running, log tail at 2026-10-23T06:42:10Z (PID 5
 | 450,016 | 0.59657 | 0.46049 | 0.46429 | 0.42436 |
 | 475,008 | 0.60992 | 0.44776 | 0.44761 | 0.44920 |
 | 500,000 | 0.62499 | 0.50167 | 0.50924 | 0.42976 |
+| 525,024 | 0.61392 | 0.38780 | 0.39359 | 0.33282 |
 
-`eval.json` on disk matches the 500,000 row. Val exact is 32/344, tied with 450,016, and val 1−NED is higher, so this row wins the `(exact, 1−NED)` comparison. Gold exact is still 0/63. Gold 1−NED is back above the 475,008 dip. Predictions are still mostly generic shells. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
+`eval.json` on disk matches the 525,024 row. Val exact is 25/344 and both val and gold 1−NED fell from the 500,000 row. Gold exact is still 0/63. The checkpoint picker uses `(exact, 1−NED)`, so `best.pt` stays on the 500,000 row. Predictions are still mostly generic shells. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
 
 ## Checkpoints and ONNX
 
