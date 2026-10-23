@@ -492,8 +492,75 @@ def _longest_low(low: np.ndarray) -> tuple[int, int]:
     return best, (best_end + 1) % bins
 
 
+def _annulus_band(radius: np.ndarray, angle: np.ndarray, ink: np.ndarray) -> dict | None:
+    """Radii where ink covers part of the circle and leaves a real gap.
+
+    A continuous outer border has almost no empty arc, so it is skipped.
+    The reading start is the median clockwise end of that gap.
+    """
+    bins = 72
+    rbins = 28
+    r0, r1 = 0.50, 0.99
+    step = (r1 - r0) / rbins
+    records = []
+    for index in range(rbins):
+        inner = r0 + index * step
+        outer = inner + step
+        sel = ink & (radius >= inner) & (radius < outer)
+        counts = np.zeros(bins, dtype=np.float32)
+        if int(sel.sum()) > 0:
+            angle_bin = np.clip((angle[sel] / 360.0 * bins).astype(np.int32), 0, bins - 1)
+            counts += np.bincount(angle_bin, minlength=bins).astype(np.float32)
+        empty = counts < 2.0
+        run, start_bin = _longest_low(empty)
+        records.append(
+            {
+                "r0": inner,
+                "r1": outer,
+                "occ": float((counts >= 2.0).mean()),
+                "gap": run * (360.0 / bins),
+                "start": float(start_bin * (360.0 / bins)),
+                "mass": float(counts.sum()),
+            }
+        )
+    chosen_index = [
+        index
+        for index, rec in enumerate(records)
+        if 0.28 <= rec["occ"] <= 0.82 and 30.0 <= rec["gap"] <= 170.0
+    ]
+    if not chosen_index:
+        return None
+    groups: list[tuple[int, int]] = []
+    start = prev = chosen_index[0]
+    for index in chosen_index[1:]:
+        if index == prev + 1:
+            prev = index
+        else:
+            groups.append((start, prev))
+            start = prev = index
+    groups.append((start, prev))
+    group = max(groups, key=lambda item: sum(records[index]["mass"] for index in range(item[0], item[1] + 1)))
+    chosen = records[group[0] : group[1] + 1]
+    ang = np.deg2rad([rec["start"] for rec in chosen])
+    start_deg = float(np.degrees(np.arctan2(np.sin(ang).mean(), np.cos(ang).mean())) % 360.0)
+    r_in = float(chosen[0]["r0"])
+    r_out = float(min(0.99, chosen[-1]["r1"] + 0.01))
+    if r_out - r_in < 0.05:
+        r_in = max(0.50, r_out - 0.08)
+    return {
+        "r_in": float(np.clip(r_in, 0.50, r_out - 0.05)),
+        "r_out": float(np.clip(r_out, 0.60, 0.99)),
+        "gap": float(np.median([rec["gap"] for rec in chosen])),
+        "start": start_deg,
+    }
+
+
 def _layout_angles(canvas: np.ndarray, r_in: float, r_out: float) -> dict:
-    """Gap, code-arc, center-line, and star cues in unwrap degrees."""
+    """Gap, code-arc, center-line, and star cues in unwrap degrees.
+
+    The outer circle of a seal is continuous. The text gap is measured on
+    the annulus that is ink on part of the circle and empty on the rest.
+    """
     height, width = canvas.shape[:2]
     yy, xx = np.mgrid[0:height, 0:width]
     cx = (width - 1) / 2.0
@@ -504,28 +571,31 @@ def _layout_angles(canvas: np.ndarray, r_in: float, r_out: float) -> dict:
     angle = np.degrees(np.arctan2(dy, dx)) % 360.0
     ink = _ink(canvas)
     bins = 72
-    ring = _smooth_circular(_bin_counts(angle, ink & (radius >= r_in) & (radius <= r_out + 0.03), bins))
-    level = float(np.percentile(ring, 60)) * 0.40
-    low = ring <= max(level, 0.5)
-    run, start_bin = _longest_low(low)
-    gap = run * (360.0 / bins)
-    gap_start = float(start_bin * (360.0 / bins)) if run >= 3 else None
-
-    code_outer = min(0.55, r_in - 0.04)
-    code_inner = 0.28
-    if code_outer > code_inner + 0.04:
-        code_mask = ink & (radius >= code_inner) & (radius <= code_outer)
+    band = _annulus_band(radius, angle, ink)
+    if band is None:
+        gap = 0.0
+        gap_start = None
     else:
-        code_mask = np.zeros(ink.shape, dtype=bool)
-    code_counts = _smooth_circular(_bin_counts(angle, code_mask, bins))
+        r_in = float(band["r_in"])
+        r_out = float(band["r_out"])
+        gap = float(band["gap"])
+        gap_start = float(band["start"])
+
+    code_outer = r_in - 0.02
+    code_inner = max(0.30, r_in - 0.16)
     code_angle = None
     code_conf = 0.0
-    if float(code_counts.sum()) > 12:
-        peak = int(np.argmax(code_counts))
-        mean = float(code_counts.mean()) + 1e-6
-        code_conf = float(np.clip(code_counts[peak] / mean / 4.0, 0.0, 1.0))
-        if code_conf >= 0.35:
-            code_angle = float(peak * (360.0 / bins))
+    if code_outer > code_inner + 0.03:
+        code_counts = _bin_counts(angle, ink & (radius >= code_inner) & (radius <= code_outer), bins)
+        total = float(code_counts.sum())
+        if total > 25:
+            window = 8
+            covered = np.convolve(np.tile(code_counts, 2), np.ones(window, dtype=np.float32), mode="valid")[:bins]
+            peak = int(np.argmax(covered))
+            frac = float(covered[peak] / total)
+            if frac >= 0.55:
+                code_angle = float((peak + window / 2.0) * (360.0 / bins)) % 360.0
+                code_conf = float(np.clip((frac - 0.55) / 0.35, 0.2, 1.0))
 
     center = ink & (radius >= 0.05) & (radius <= 0.42)
     ys, xs = np.nonzero(center)
@@ -550,6 +620,8 @@ def _layout_angles(canvas: np.ndarray, r_in: float, r_out: float) -> dict:
         "center_phi": center_phi,
         "center_conf": center_conf,
         "star_top": star_angle,
+        "r_in": float(r_in),
+        "r_out": float(r_out),
     }
 
 
@@ -587,12 +659,12 @@ def choose_start(canvas: np.ndarray, r_in: float, r_out: float) -> dict:
     """
     cues = _layout_angles(canvas, r_in, r_out)
     candidates: list[tuple[float, float, str]] = []
-    if cues["gap_start"] is not None and cues["gap_deg"] >= 15.0:
+    if cues["gap_start"] is not None and cues["gap_deg"] >= 30.0:
         # A measured gap outranks the code arc and either center-line flip.
         candidates.append((float(cues["gap_start"]), 1.05 + min(cues["gap_deg"] / 200.0, 0.5), "gap"))
     if cues["code_angle"] is not None:
         candidates.append(
-            ((cues["code_angle"] + CODE_TO_START_DEG) % 360.0, 0.55 + 0.4 * cues["code_conf"], "code")
+            ((cues["code_angle"] + CODE_TO_START_DEG) % 360.0, 0.70 + 0.25 * cues["code_conf"], "code")
         )
     if cues["center_phi"] is not None:
         candidates.append(((UPRIGHT_START_DEG + cues["center_phi"]) % 360.0, cues["center_conf"], "center"))
@@ -622,6 +694,8 @@ def choose_start(canvas: np.ndarray, r_in: float, r_out: float) -> dict:
         "confidence": float(confidence),
         "source": source,
         "wide_gap": margin > 0.0,
+        "r_in": float(cues["r_in"]),
+        "r_out": float(cues["r_out"]),
     }
 
 
@@ -686,6 +760,8 @@ def unwrap_ring(
     rgb = crop_to_roi(rgb, roi)
     canvas, r_in, r_out = fit_ring_canvas(rgb)
     chosen = choose_start(canvas, r_in, r_out)
+    r_in = float(chosen["r_in"])
+    r_out = float(chosen["r_out"])
     if angle is not None and np.isfinite(angle):
         chosen["start_deg"] = float(angle) % 360.0
         chosen["source"] = "aliyun"
