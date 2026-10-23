@@ -19,6 +19,13 @@ export FLAGS_allocator_strategy=auto_growth
 export FLAGS_initial_gpu_memory_in_mb=256
 export FLAGS_reallocate_gpu_memory_in_mb=128
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+# Paddle 2.6 (CUDA 11.8) needs cuDNN 8. The PyTorch env on this host only has cuDNN 9.
+CUDNN8=${CUDNN8:-/home/znsoft/miniconda3/envs/lxswarp/lib/python3.10/site-packages/torch/lib}
+mkdir -p "$VENV/cudnn"
+if [ -f "$CUDNN8/libcudnn.so.8" ] && [ ! -e "$VENV/cudnn/libcudnn.so" ]; then
+  ln -s "$CUDNN8/libcudnn.so.8" "$VENV/cudnn/libcudnn.so"
+fi
+export LD_LIBRARY_PATH="$VENV/cudnn:$CUDNN8${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 INIT="$PADDLE/ppocr/data/imaug/__init__.py"
 if ! grep -q "SealStripAug" "$INIT"; then
