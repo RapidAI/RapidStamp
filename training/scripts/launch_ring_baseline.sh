@@ -8,10 +8,12 @@ REPO=${REPO:-$DATA/src/RapidStamp}
 PADDLE=${PADDLE:-$DATA/src/PaddleOCR}
 VENV=${VENV:-$DATA/venvs/paddleocr}
 CFG=${CFG:-$REPO/training/configs/ch_PP-OCRv4_rec_seal.yml}
-LOG=$DATA/logs/ring_baseline.train.log
-ZERO=$DATA/logs/ring_baseline.zeroshot.log
+NAME=${NAME:-ring_baseline}
+LOG=$DATA/logs/${NAME}.train.log
+ZERO=$DATA/logs/${NAME}.zeroshot.log
+CKPT=${CKPT:-$DATA/checkpoints/$NAME}
 
-mkdir -p "$DATA/logs" "$DATA/checkpoints/ring_baseline"
+mkdir -p "$DATA/logs" "$CKPT"
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 export PYTHONPATH="$REPO/python/src:$REPO/training${PYTHONPATH:+:$PYTHONPATH}"
@@ -60,5 +62,5 @@ tail -n 40 "$ZERO"
 
 echo "train -> $LOG"
 nohup python tools/train.py -c "$CFG" > "$LOG" 2>&1 &
-echo $! | tee "$DATA/logs/ring_baseline.pid"
-echo "pid $(cat "$DATA/logs/ring_baseline.pid")"
+echo $! | tee "$DATA/logs/${NAME}.pid"
+echo "pid $(cat "$DATA/logs/${NAME}.pid")"

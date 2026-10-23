@@ -28,6 +28,8 @@ sys.path.insert(0, str(ROOT / "python" / "src"))
 sys.path.insert(0, str(ROOT / "training"))
 
 from rapidstamp_train.ring_text import (  # noqa: E402
+    aliyun_angle,
+    aliyun_roi,
     dedupe_by_md5,
     file_digests,
     is_gold,
@@ -134,6 +136,8 @@ def main() -> None:
                 "file_md5": file_md5,
                 "det_class": row.get("det_class"),
                 "path": str(path),
+                "roi": aliyun_roi(row),
+                "angle": aliyun_angle(row),
             }
         )
         if index and index % 2000 == 0:
@@ -154,7 +158,7 @@ def main() -> None:
     for index, row in enumerate(kept):
         rgb = load_rgb(Path(row["path"]))
         try:
-            unwound = unwrap_ring(rgb)
+            unwound = unwrap_ring(rgb, roi=row.get("roi"), angle=row.get("angle"))
         except Exception as exc:
             reasons["unwrap_error"] += 1
             _examples(examples, "unwrap_error", f"{row['file']}: {exc}")
@@ -173,10 +177,18 @@ def main() -> None:
             "det_class": row["det_class"],
             "file_md5": row["file_md5"],
             "start_deg": unwound["start_deg"],
+            "unwrap_start": unwound["unwrap_start"],
             "gap_deg": unwound["gap_deg"],
+            "span_deg": unwound["span_deg"],
+            "confidence": unwound["confidence"],
+            "source": unwound["source"],
             "r_in": unwound["r_in"],
             "r_out": unwound["r_out"],
             "wide_gap": unwound["wide_gap"],
+            "strip_w": int(unwound["strip"].shape[1]),
+            "strip_h": int(unwound["strip"].shape[0]),
+            "roi": row.get("roi"),
+            "angle": row.get("angle"),
         }
         kept_rows.append(record)
         gaps.append(unwound["gap_deg"])
@@ -219,6 +231,9 @@ def main() -> None:
         "train": len(lists["train"]),
         "val": len(lists["val"]),
         "wide_gap": int(sum(1 for row in kept_rows if row["wide_gap"])),
+        "sources": dict(Counter(row["source"] for row in kept_rows)),
+        "span_deg_p50": float(np.median([row["span_deg"] for row in kept_rows])) if kept_rows else None,
+        "strip_w_p50": float(np.median([row["strip_w"] for row in kept_rows])) if kept_rows else None,
         "gap_deg_p50": float(np.median(gap_arr)) if gap_arr.size else None,
         "r_in_p50": float(np.median(rad_arr)) if rad_arr.size else None,
         "sample_sheet": str(sheet_path) if chosen else "",

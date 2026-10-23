@@ -6,8 +6,13 @@ import numpy as np
 import pytest
 
 from rapidstamp_train.ring_text import (
+    aliyun_angle,
+    best_ctc_rows,
+    canonical_strip_name,
+    crop_to_roi,
     dedupe_by_md5,
     edit_distance,
+    inference_starts,
     is_gold,
     label_reason,
     load_gold,
@@ -40,6 +45,10 @@ def test_label_filter_keeps_a_real_ring_and_drops_the_rest():
     assert label_reason(_row(ring_text="XX公司专用章")) == "template"
     assert label_reason(_row(ring_text="演示章")) == "template"
     assert label_reason(_row(ring_text="Sample Seal")) == "template"
+    assert label_reason(_row(ring_text="请在这里输入单位名称")) == "template"
+    assert label_reason(_row(ring_text="此处可输入编辑文字有限责任公司")) == "template"
+    assert label_reason(_row(ring_text="测试样品专用章")) == "template"
+    assert label_reason(_row(ring_text="湖北省计量测试技术研究院")) is None
     assert label_reason(_row(det_class="square_personal")) == "class"
     assert label_reason(_row(det_class="rect_stamp")) == "class"
     assert label_reason(_row(ring_text="司")) == "length"
@@ -94,29 +103,36 @@ def test_one_ned_keeps_spaces_and_averages_per_row():
     assert summary["one_ned"] == pytest.approx((1.0 + 0.5) / 2)
 
 
-def _offset_ring() -> np.ndarray:
+def _ring(gap_lo: float, gap_hi: float, cy: float = 90.0, cx: float = 140.0) -> np.ndarray:
     size = 220
     image = np.full((size, size, 3), 248, np.uint8)
-    cy, cx = 90.0, 140.0
     yy, xx = np.mgrid[0:size, 0:size]
     rad = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
     ang = np.degrees(np.arctan2(yy - cy, xx - cx)) % 360.0
-    ink = (rad >= 70) & (rad <= 86) & ~((ang >= 20) & (ang < 160))
+    ink = (rad >= 70) & (rad <= 86) & ~((ang >= gap_lo) & (ang < gap_hi))
     image[ink] = (190, 40, 40)
     return image
 
 
 def test_unwrap_recenters_an_offset_ring_and_uses_one_start():
-    image = _offset_ring()
+    image = _ring(20, 160)
     unwound = unwrap_ring(image, out_w=96, out_h=16)
     strip = unwound["strip"]
     assert strip.shape == (16, 96, 3)
+    assert unwound["source"] == "gap"
     assert unwound["wide_gap"]
+    assert unwound["span_deg"] < 330
     assert 140 <= unwound["start_deg"] <= 185
     assert 0.65 <= unwound["r_in"] / unwound["r_out"] <= 0.92
     columns = strip[..., 0].mean(axis=0)
-    assert (columns > 230).sum() >= 8
-    assert (columns < 210).sum() >= 8
+    white = int((columns > 230).sum())
+    red = int((columns < 210).sum())
+    assert red > white
+    assert red >= 8
+    assert white >= 1
+    sized = unwrap_ring(image)
+    assert sized["strip"].shape[0] == 48
+    assert 640 <= sized["strip"].shape[1] <= 960
     from rapidstamp.geometry import polar_unwrap
 
     naive = polar_unwrap(
@@ -130,6 +146,53 @@ def test_unwrap_recenters_an_offset_ring_and_uses_one_start():
     fitted_red = float(np.mean(strip[..., 0] < 210))
     naive_red = float(np.mean(naive[..., 0] < 210))
     assert fitted_red > naive_red
+
+
+def test_gap_start_follows_a_rotated_gap():
+    upright = unwrap_ring(_ring(40, 140), out_w=64, out_h=16)
+    turned = unwrap_ring(_ring(130, 230), out_w=64, out_h=16)
+    assert upright["source"] == "gap"
+    assert turned["source"] == "gap"
+    delta = (turned["start_deg"] - upright["start_deg"]) % 360.0
+    assert 70 <= delta <= 110
+
+
+def test_inference_starts_search_only_when_the_gap_is_ambiguous():
+    assert inference_starts(140, 1.2, 50, source="gap") == [140.0]
+    starts = inference_starts(140, 0.2, 0, source="default")
+    assert len(starts) == 6
+    assert 140.0 in starts
+    assert 320.0 in starts
+
+
+def test_roi_crop_tightens_a_seal_box_and_ignores_a_fragment():
+    image = np.full((100, 120, 3), 255, np.uint8)
+    image[50, 60] = (180, 20, 20)
+    cropped = crop_to_roi(image, {"left": 10, "top": 10, "width": 100, "height": 80})
+    assert cropped.shape[0] < image.shape[0]
+    assert cropped.shape[1] <= image.shape[1]
+    assert cropped.shape[0] > 40
+    same = crop_to_roi(image, {"left": 0, "top": 0, "width": 20, "height": 20})
+    assert same.shape == image.shape
+
+
+def test_aliyun_angle_overrides_the_layout_start():
+    unwound = unwrap_ring(_ring(20, 160), out_w=32, out_h=8, angle=200)
+    assert unwound["source"] == "aliyun"
+    assert unwound["start_deg"] == pytest.approx(200.0)
+    assert aliyun_angle({"raw": json.dumps({"result": [{"angle": 15}]})}) == pytest.approx(15.0)
+    assert aliyun_angle({"raw": json.dumps({"result": [{"roi": {"left": 1}}]})}) is None
+
+
+def test_best_ctc_row_keeps_the_highest_score_per_strip():
+    rows = [
+        ("a__gap__s140.png", "甲", 0.4),
+        ("a__gap__s158.png", "甲乙", 0.9),
+        ("b.png", "丙", 0.2),
+    ]
+    assert canonical_strip_name("a__gap__s140.png") == "a__gap.png"
+    picked = best_ctc_rows(rows)
+    assert picked == [("a__gap.png", "甲乙", 0.9), ("b.png", "丙", 0.2)]
 
 
 def test_blank_crop_still_unwraps():
