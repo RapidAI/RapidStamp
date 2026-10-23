@@ -82,6 +82,10 @@ python training/scripts/collect_web_seals.py \
 
 2026-10-17 用已发布的按类别分流识别读这 63 张，权重目录是训练机上的 `models_route`（和 `models/` 里的检测、CTC、PP-OCRv5、`rec_route.txt` 同一份）。每张检出 1 个框，类别全是 `round_official`，因此 63 张都走 CTC，没有一张走到 PP-OCRv5。框和清单里的金标准框 IoU 都在 0.88 以上，平均 0.959。环文整串 0/63，字符准确率（逐张 1−NED 的平均，NED 是编辑距离除以较长串的长度）是 0.050。只计 57 张 `user_verified` 也是 0/57、0.053。同一金标准上，阿里云环形初稿是 55/63（87.3%）、1−NED 0.979。约 199 ms/张。这一轮没有训练。
 
+2026-10-23 的环文基线读 `/home/rapidstamp_data/web_seals_cn_all`（15,738 行），不读 `/home/mayong`。脚本是 `training/scripts/prepare_ring_strips.py`。过滤：状态 200、环文非空、环文概率至少 0.90、去掉模板章（某某、XX、演示章、测试专用、样章、sample 等）、只留圆章、椭圆、发票、财务、公证和拉丁章、长度 2 到 25。过了标签的是 11,262 行。其中 7 行含有 PP-OCRv4 字表没有的字，丢掉。63 张金标准裁图没有出现在这批里。按文件字节去重没有再去掉任何一行。文件名 sha256 前 8 位转成整数后模 1000，小于 30 的是验证：训练 10,907，验证 348。条带是把外圈墨拟合到椭圆上再做极坐标展开，一张图只留一条。起点取墨的缺口；缺口不到 40° 就用 140°。缺口中位数是 0°，起点中位数是 140°，缺口达到 40° 的只有 631 张。样张在 `/home/rapidstamp_data/ring_baseline/sample_sheet.jpg`。
+
+识别器从官方 PP-OCRv4 中文权重 `student.pdparams` 微调 20 个 epoch，学习率 0.0002，batch 16。配置是 `training/configs/ch_PP-OCRv4_rec_seal.yml`。验证条带上，微调前整串 8/348、1−NED 0.138，空预测 203 张；微调后整串 16/348、1−NED 0.224，空预测 44 张。1−NED 至少 0.8 的有 41 张，1−NED 为 0 的有 148 张。训练日志里 Paddle 的 RecMetric（会丢掉空格）最好是 acc 0.083、norm_edit_dis 0.405，在第 20 个 epoch。权重是 `/home/rapidstamp_data/checkpoints/ring_baseline/best_accuracy.pdparams`，推理模型在同目录的 `inference/`，ONNX 是 `ring_rec.onnx`（10,815,395 字节，输入 `x`，高 48）。63 张金标准裁图不在这块盘上，这一轮没有打出金标准分数。
+
 用已发布检测器做起点，在原训练页上加了上述大尺度裁剪，并混入这 624 张贴页，又训了 4 个 epoch。63 张测试裁图上精确率、召回和 mAP50 都从 0 变成 1.0（63/63），约 202 ms/张。52 页网页测试的召回仍是 0.397（23/58），mAP50 仍是 0.097，精确率从 0.271 降到 0.240（23/96），约 306 ms/张。混合 hold-out 的检测 mAP50 从 0.835 到 0.831，整页标题从 0.523 到 0.510，约 193 ms/张。检测 ONNX 仍是 3,671,258 字节。这版检测器替换了 `models/seal_det.onnx`。识别后来按类别分流，检测数字不变；方章整页从 0.007 到 0.255，混合标题从 0.510 到 0.532，整页从 193 ms 到 227 ms。
 
 ReST 的测试图没有转写，脚本不使用 `test_images.zip`。有标注的 5,000 张里大约 10% 按 id 留作验证。检测框是贴回文档页的整枚裁图；标题多边形只说明字在哪，不当作印章外框。
