@@ -1,6 +1,8 @@
 # 训练数据放在哪
 
-图像和 checkpoint 不进 git。训练机上 `/home` 和 `/home/mayong` 不是同一块盘，大文件只放 `/home/mayong`。
+2026-10-23 起，当前数据只在 `/home/rapidstamp_data`。`/home/mayong` 禁止读写：那块盘已经失败，目录现在只是 `/home` 上一个 root 所有的空挂载点，`df` 显示的仍是 `/dev/sdb`。下面表格里的 `/home/mayong` 路径是 2026-10-16 的历史记录，不要再往那里写，也不要去恢复。接手步骤、目录计数和正在跑的训练见 `docs/HANDOVER.md`。
+
+图像和 checkpoint 不进 git。
 
 | 路径 | 内容 |
 | --- | --- |
