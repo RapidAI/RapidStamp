@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python" / "src"))
 sys.path.insert(0, str(ROOT / "training"))
 
+from rapidstamp_train.direct_aug import match_gold_image  # noqa: E402
 from rapidstamp_train.ring_text import (  # noqa: E402
     load_rgb,
     strip_name,
@@ -88,7 +89,13 @@ def locate(row: dict, images: dict[str, Path]) -> Path | None:
     for key in keys:
         if key and key in images:
             return images[key]
-    return None
+    seen: set[Path] = set()
+    paths: list[Path] = []
+    for path in images.values():
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+    return match_gold_image(row["file"], paths)
 
 
 def read_preds(path: Path) -> dict[str, str]:
