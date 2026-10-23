@@ -192,7 +192,8 @@ def augment_seal(image: Image.Image, rng: random.Random, font_path: Path | None 
         image = image.filter(ImageFilter.GaussianBlur(radius=rng.uniform(0.3, 1.8)))
     arr = np.asarray(image).astype(np.float32)
     if rng.random() < 0.5:
-        arr += rng.normal(0.0, rng.uniform(3.0, 16.0), arr.shape)
+        noise = np.random.default_rng(rng.randrange(1 << 31)).normal(0.0, rng.uniform(3.0, 16.0), arr.shape)
+        arr += noise
     if rng.random() < 0.45:
         keep = rng.uniform(0.50, 0.90)
         white = rng.uniform(220.0, 255.0)
