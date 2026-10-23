@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T07:14:23Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T07:15:20Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -55,7 +55,7 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 | --- | --- | --- | --- | --- |
 | `a1_meta.tar` | 20 | 442,204,160 | 1,124 | complete. Tar sha256 `f2556116d5aa80cdd48af47887a72a40274fff0d398de67620c711b0da25f0dc`. Extracted. |
 | `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | complete. Tar sha256 `b708e5980449559949c136bc1d60127b00d6bbcbb66978b1fcd1218a191fd379`. Extracted into the existing `web_seals_v2_raw/` tree with no file collisions. |
-| `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | 000–013, sha256 checked on the server. |
+| `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | 000–015, sha256 checked on the server. |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
 | `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
 
@@ -123,7 +123,7 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T07:14:23Z (PID 52706): seen 716,416, loss 4.647, 110.4 img/s. Eval so far (1−NED). Latest val exact is 63/344 at 700,000, down from 68/344 at 675,008, so 675,008 still wins `(exact, 1−NED)`. Gold exact is 1/63 again, the second time after 625,024.
+Pretraining snapshot, job still running, log tail at 2026-10-23T07:15:20Z (PID 52706): seen 722,816, loss 4.628, 110.4 img/s. Eval so far (1−NED). Latest val exact is 63/344 at 700,000, down from 68/344 at 675,008, so 675,008 still wins `(exact, 1−NED)`. Gold exact is 1/63 again, the second time after 625,024.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
