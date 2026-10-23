@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T07:40:44Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T07:42:40Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -57,7 +57,7 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 | `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | complete. Tar sha256 `b708e5980449559949c136bc1d60127b00d6bbcbb66978b1fcd1218a191fd379`. Extracted into the existing `web_seals_v2_raw/` tree with no file collisions. |
 | `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | complete. Tar sha256 `49c76d74067fd9167ad4d46f255d641d575d1d943e37bf133b3abb413319dfb5`. Extracted into `web_seals_v2_foreign/crops/` with no file collisions. |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | complete. Tar sha256 `0e128ad489b79d8219777c29e88baecc99ceb394dc9c2835c9cecc3b9a283d87`. Extracted into `web_seals_v2_raw/rejected/` with no file collisions. |
-| `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | 000–001, sha256 checked on the server. |
+| `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | 000–003, sha256 checked on the server. |
 
 `a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. `a1_meta.tar` is `/home/rapidstamp_data/backup/full_v1/a1_meta.tar` (442,204,160 bytes). `a2_cn_crops.tar` is `/home/rapidstamp_data/backup/full_v1/a2_cn_crops.tar` (1,361,745,920 bytes, 26,271 tar members, 26,265 files). `a3_foreign_crops.tar` is `/home/rapidstamp_data/backup/full_v1/a3_foreign_crops.tar` (591,646,720 bytes, 4,788 tar members, 4,787 files, 1 directory). `a4_cn_rejected.tar` is `/home/rapidstamp_data/backup/full_v1/a4_cn_rejected.tar` (277,166,080 bytes, 4,351 tar members, 4,350 files, 1 directory). All four are extracted under `/home/rapidstamp_data/raw_box_backup/` (36,526 files and 20 directories after a4). a1 top level: `misc/` (13 files, including `gold.zip` and `seals_to_label.zip`, each 16,362,139 bytes, plus `aliyun_calls.txt` and `aliyun_calls_key2.txt`, which were not printed), `models/seal_det.onnx` (3,671,258 bytes), `web_seals_aliyun_firstscrape/` (998 files under `raw/`, plus `downloaded.json`, `manifest.jsonl`, `urls.json`), `web_seals_cn_all_scripts/` (3 files), `web_seals_v2_foreign/` (14 files), and the scripts, manifests, and urls already in `web_seals_v2_raw/`. a2 added crops into that same `web_seals_v2_raw/` tree and did not overwrite an existing file. Batch directories now hold `batch2` 3,915, `batch3` 4,047, `batch4` 8,038, `batch5` 6,881, and `batch6` 3,460 files; the extra files beyond the manifest snapshot (3,899 / 4,034 / 8,025 / 6,864 / 3,443) are the metadata a1 already had in those directories. a3 added 4,787 files under `web_seals_v2_foreign/crops/` and did not overwrite the 14 metadata files a1 had already put in `web_seals_v2_foreign/`. That directory now holds 4,801 files. a4 added 4,350 files under `web_seals_v2_raw/rejected/` and did not overwrite an existing file. Parts 010 and 011 arrived after 012; the tar was assembled only once 000–012 were all present. The trainer was left running through all four copies and extracts.
 
@@ -123,7 +123,7 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T07:40:44Z (PID 52706): seen 891,200, loss 4.220, 110.5 img/s. Eval so far (1−NED). Latest val exact is 77/344 at 875,008, down from 89/344 at 850,016, so best stays on 850,016. Gold exact is 3/63.
+Pretraining snapshot, job still running, log tail at 2026-10-23T07:42:40Z (PID 52706): seen 903,808, loss 4.193, 110.4 img/s. Eval so far (1−NED). Latest val exact is 92/344 at 900,000, up from 89/344 at 850,016, so this row wins `(exact, 1−NED)`. Gold exact is 3/63.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
@@ -162,8 +162,9 @@ Pretraining snapshot, job still running, log tail at 2026-10-23T07:40:44Z (PID 5
 | 825,024 | 0.74792 | 0.66847 | 0.67411 | 0.61488 |
 | 850,016 | 0.75831 | 0.67137 | 0.68042 | 0.58545 |
 | 875,008 | 0.74476 | 0.69264 | 0.70517 | 0.57363 |
+| 900,000 | 0.76085 | 0.68798 | 0.70257 | 0.54943 |
 
-`eval.json` on disk matches the 875,008 row. Val exact is 77/344, below 89/344 at 850,016, so best stays on that earlier checkpoint. Gold exact is 3/63 (verified 3/57, pending 0/6). Gold 1−NED rose to 0.69264. Gold exact hits so far are 1 at 625,024, 700,000, and 725,024, 4 at 800,000, 2 at 825,024, and 3 at 850,016 and 875,008. Predictions are still mostly generic shells outside those gold hits. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
+`eval.json` on disk matches the 900,000 row. Val exact is 92/344, so this row wins `(exact, 1−NED)` over 89/344 at 850,016. Gold exact is 3/63 (verified 3/57, pending 0/6). Gold 1−NED is 0.68798. Gold exact hits so far are 1 at 625,024, 700,000, and 725,024, 4 at 800,000, 2 at 825,024, and 3 at 850,016, 875,008, and 900,000. Predictions are still mostly generic shells outside those gold hits. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
 
 ## Checkpoints and ONNX
 
