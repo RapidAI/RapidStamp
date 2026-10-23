@@ -25,7 +25,7 @@ class _Greedy(nn.Module):
         self.model = model
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
-        return self.model.greedy(image)
+        return self.model.tokens(image)
 
 
 def main() -> None:

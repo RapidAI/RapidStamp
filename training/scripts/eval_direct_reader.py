@@ -109,7 +109,7 @@ def main() -> None:
     with torch.inference_mode():
         for images, _target, texts in gold_loader:
             images = images.to(device)
-            preds = [charset.decode(row.tolist()) for row in model.greedy(images)]
+            preds = [charset.decode(row.tolist()) for row in model.tokens(images)]
             for pred, text in zip(preds, texts):
                 status = gold[offset]["text_status"]
                 pairs_status.setdefault(status, []).append((pred, text))

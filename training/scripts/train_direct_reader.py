@@ -35,7 +35,6 @@ from rapidstamp_train.direct_reader import (  # noqa: E402
     IMAGE_SIZE,
     DirectReader,
     ids_to_text,
-    teacher_tokens,
 )
 from rapidstamp_train.ring_text import one_ned, summarize_pairs  # noqa: E402
 
@@ -99,11 +98,12 @@ def evaluate(model, loader, charset, device) -> dict:
     pairs = []
     for images, _target, texts in loader:
         images = images.to(device, non_blocking=True)
-        pred_ids = model.greedy(images)
+        pred_ids = model.tokens(images)
         preds = ids_to_text(pred_ids, charset)
         pairs.extend(zip(preds, texts))
     summary = summarize_pairs(pairs)
     summary["empty_pred"] = sum(pred == "" for pred, _gold in pairs)
+    summary["examples"] = [{"pred": pred, "gold": gold} for pred, gold in pairs[:4]]
     return summary
 
 
@@ -117,8 +117,8 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--encoder-lr", type=float, default=1e-4)
+    parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--encoder-lr", type=float, default=2e-4)
     parser.add_argument("--warmup-epochs", type=float, default=2.0)
     parser.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
@@ -155,7 +155,7 @@ def main() -> None:
         weight_decay=0.01,
     )
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
-    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=0, label_smoothing=0.1)
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=0)
     args.out.mkdir(parents=True, exist_ok=True)
     log_path = args.out / "train_log.jsonl"
     best_score: tuple[float, float] | None = None
@@ -179,7 +179,7 @@ def main() -> None:
             target = target.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast("cuda", enabled=device.type == "cuda"):
-                logits = model(images, teacher_tokens(target))
+                logits = model(images)
                 loss = loss_fn(logits.transpose(1, 2), target)
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
