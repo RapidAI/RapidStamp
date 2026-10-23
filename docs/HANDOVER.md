@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T05:41:12Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T05:41:52Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -109,15 +109,16 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T05:41:12Z (elapsed 15:14, PID 52706): seen 99,424, loss 7.803, 110.9 img/s. Eval so far (exact is 0 throughout; 1−NED):
+Pretraining snapshot, job still running, log tail at 2026-10-23T05:41:52Z (PID 52706): seen 103,616, loss 7.780, 110.6 img/s. Eval so far (exact is 0 throughout; 1−NED):
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
 | 25,024 | 0.05468 | 0.03358 | 0.03711 | 0.00000 |
 | 50,016 | 0.11895 | 0.14898 | 0.15744 | 0.06859 |
 | 75,008 | 0.14275 | 0.14012 | 0.14940 | 0.05193 |
+| 100,000 | 0.14770 | 0.10530 | 0.11396 | 0.02302 |
 
-`eval.json` on disk matches the 75,008 row. Predictions are still generic shells (`中庆市…有限`). Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
+`eval.json` on disk matches the 100,000 row. Val 1−NED is still rising. Gold 1−NED moved up through 50,016 and back down at 75,008 and 100,000. Predictions are still generic shells (`中庆市…有限`). Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
 
 ## Checkpoints and ONNX
 
