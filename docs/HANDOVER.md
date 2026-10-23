@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T06:58:54Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-23T07:00:09Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -54,12 +54,12 @@ A second copy of the collection box is arriving as five plain tar archives, spli
 | Archive | Parts | Bytes | Files | Received |
 | --- | --- | --- | --- | --- |
 | `a1_meta.tar` | 20 | 442,204,160 | 1,124 | complete. Tar sha256 `f2556116d5aa80cdd48af47887a72a40274fff0d398de67620c711b0da25f0dc`. Extracted. |
-| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | 000–057, sha256 checked on the server. |
+| `a2_cn_crops.tar` | 60 | 1,361,745,920 | 26,265 | complete. Tar sha256 `b708e5980449559949c136bc1d60127b00d6bbcbb66978b1fcd1218a191fd379`. Extracted into the existing `web_seals_v2_raw/` tree with no file collisions. |
 | `a3_foreign_crops.tar` | 26 | 591,646,720 | 4,787 | none |
 | `a4_cn_rejected.tar` | 13 | 277,166,080 | 4,350 | none |
 | `a5_foreign_rejected.tar` | 36 | 813,629,440 | 3,637 | none |
 
-`a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. `a1_meta.tar` is `/home/rapidstamp_data/backup/full_v1/a1_meta.tar` (442,204,160 bytes). Extraction is `/home/rapidstamp_data/raw_box_backup/` (1,124 files, 12 directories, no absolute or `..` paths). Top level: `misc/` (13 files, including `gold.zip` and `seals_to_label.zip`, each 16,362,139 bytes, plus `aliyun_calls.txt` and `aliyun_calls_key2.txt`, which were not printed), `models/seal_det.onnx` (3,671,258 bytes), `web_seals_aliyun_firstscrape/` (998 files under `raw/`, plus `downloaded.json`, `manifest.jsonl`, `urls.json`), `web_seals_cn_all_scripts/` (3 files), `web_seals_v2_foreign/` (14 files), `web_seals_v2_raw/` (scripts, manifests, urls, and `batch2` through `batch6`). The trainer was left running through the copy and the extract.
+`a1_meta` is labels, manifests, urls, logs, scripts, the first Aliyun scrape (998 images), misc csvs, `gold.zip`, `seals_to_label.zip`, `seal_det.onnx`, and combine scripts. `a2` is CN crops not already in `web_seals_cn_all` (b2 3,899, b3 4,034, b4 8,025, b5 6,864, b6 3,443). `a3` is 4,787 foreign crops. `a4` is 4,350 rejected CN batch-1 crops. `a5` is 3,637 rejected foreign crops. `a1_meta.tar` is `/home/rapidstamp_data/backup/full_v1/a1_meta.tar` (442,204,160 bytes). `a2_cn_crops.tar` is `/home/rapidstamp_data/backup/full_v1/a2_cn_crops.tar` (1,361,745,920 bytes, 26,271 tar members, 26,265 files). Both are extracted under `/home/rapidstamp_data/raw_box_backup/` (27,389 files and 18 directories after both archives). a1 top level: `misc/` (13 files, including `gold.zip` and `seals_to_label.zip`, each 16,362,139 bytes, plus `aliyun_calls.txt` and `aliyun_calls_key2.txt`, which were not printed), `models/seal_det.onnx` (3,671,258 bytes), `web_seals_aliyun_firstscrape/` (998 files under `raw/`, plus `downloaded.json`, `manifest.jsonl`, `urls.json`), `web_seals_cn_all_scripts/` (3 files), `web_seals_v2_foreign/` (14 files), and the scripts, manifests, and urls already in `web_seals_v2_raw/`. a2 added crops into that same `web_seals_v2_raw/` tree and did not overwrite an existing file. Batch directories now hold `batch2` 3,915, `batch3` 4,047, `batch4` 8,038, `batch5` 6,881, and `batch6` 3,460 files; the extra files beyond the manifest snapshot (3,899 / 4,034 / 8,025 / 6,864 / 3,443) are the metadata a1 already had in those directories. The trainer was left running through both copies and extracts.
 
 ## Datasets
 
@@ -123,7 +123,7 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T06:58:54Z (PID 52706): seen 613,600, loss 4.964, 110.4 img/s. Eval so far (1−NED). Latest val exact is 42/344 at 600,000, up from 41/344 at 575,008. Gold exact is still 0/63. Exact is compared first, so this row wins `(exact, 1−NED)` even though 1−NED fell.
+Pretraining snapshot, job still running, log tail at 2026-10-23T07:00:09Z (PID 52706): seen 622,016, loss 4.935, 110.4 img/s. Eval so far (1−NED). Latest val exact is 42/344 at 600,000, up from 41/344 at 575,008. Gold exact is still 0/63. Exact is compared first, so this row wins `(exact, 1−NED)` even though 1−NED fell.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
