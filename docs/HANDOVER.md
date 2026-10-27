@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-27T06:24:58Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
+Updated 2026-10-27T07:10Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -8,7 +8,7 @@ Update this file after every meaningful step, measured result, or change to data
 
 Read the curved ring text of a Chinese seal from the whole crop, without unwrapping. The bar is the Aliyun stamp-OCR draft on the 63 user-proofread gold crops: **55/63 exact, 1−NED 0.979**. The published class-routed pipeline scores **0/63, 1−NED 0.050** on the same crops. The new model has to stay ONNX-exportable for a later C++ path. It is a separate recognizer from `models/seal_rec.onnx` and from `seal_rec_ppocr.onnx`.
 
-Synthetic pretraining and the first fine-tune finished on 2026-10-23. That selected checkpoint is 17/63 exact and 1−NED 0.84294 on gold, against the Aliyun bar above. A second fine-tune, started from that checkpoint on the rebuilt kept list, is running. Do not start another trainer. Do not train a second head for center text or the bottom code until ring text is near that bar.
+Synthetic pretraining and the first fine-tune finished on 2026-10-23. That selected checkpoint is 17/63 exact and 1−NED 0.84294 on gold. The third-data fine-tune finished on 2026-10-27. Its selected checkpoint is 25/63 exact and 1−NED 0.90432 on gold, against the Aliyun bar above. Val for that run is 226/455 because the hold-out grew with the new rows. No trainer is running. Do not start another one unless asked. Do not train a second head for center text or the bottom code until ring text is near that bar.
 
 Headline metric, from `training/rapidstamp_train/ring_text.py` `one_ned`: mean over samples of `1 − edit_distance / max(len(pred), len(gold))`. Both strings empty scores 1. Spaces count. Do not strip. This is not Paddle `RecMetric` (`ignore_space=True`, and it keeps only CJK and alphanumerics).
 
@@ -17,7 +17,7 @@ Headline metric, from `training/rapidstamp_train/ring_text.py` `one_ned`: mean o
 - Training host: `home.rapidai.tech`, SSH port 44, user `znsoft`. The password is held by the user and is already in the operator environment as `SSHPASS`. Use `sshpass -e`. Do not write it down. Connections reset; retry.
 - Read and write only `/home/rapidstamp_data`. `/home` is `/dev/sdb`, about 1.8T, 713G used, 1.1T free, 41% at 2026-10-27T06:15:02Z.
 - `/home/mayong` is forbidden. `ls` shows a root-owned directory dated 2025-05-19. `df` of that path reports the same `/dev/sdb` as `/home`, so it is not a separate live data disk. Older notes in `docs/data.md` tell you to put large files there. Those notes are historical. Do not read it, write it, or try to recover it.
-- GPU: RTX 6000 Ada, 49140 MiB. The live fine-tune is PID 4633 (`logs/parseq_third.pid`), confirmed at 2026-10-27T06:24:58Z. The old pid file `parseq_reader.pid` still contains 52706, and that process is dead. VLLM PID 17019 is also gone. Do not start a second trainer. Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean a trainer is alive.
+- GPU: RTX 6000 Ada, 49140 MiB. No trainer is running. `logs/parseq_third.pid` still contains 4633 and `logs/parseq_reader.pid` still contains 52706. Both processes are dead. VLLM PID 17019 is also gone. Do not start a trainer unless asked. Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean a trainer is alive.
 - The server tree `/home/rapidstamp_data/src/RapidStamp` is a partial copy, not a git checkout. Sync code with tar over SSH. Do not `git pull` there.
 - Do not commit the SSH password, an Aliyun APPCODE, real seal images, gold crops, name lists, fonts, or checkpoints.
 - Do not delete `incoming_v2`, the gold crops, the ring-baseline checkpoint, the four zips under `third/`, `web_seals_cn_all/labels.jsonl.bak-before-third-20261027`, `ring_v2/kept.jsonl.bak-before-third-20261027`, or `checkpoints/parseq_reader/finetune/best.pt`.
@@ -29,10 +29,10 @@ Inventory taken 2026-10-23T05:37:44Z. Sizes are `du -sh`. File counts are recurs
 | Path | Size | What is there |
 | --- | --- | --- |
 | `/home/rapidstamp_data/backup` | 651M plus the incoming full backup | `gold_db18.zip` (16,362,139 bytes), `web_seals_cn_all.zip` (385,220,370), `web_seals_delta_v2.zip` (263,497,928), and `gold_seals/seals_to_label/` (63 png + `labels.csv`, 64 files). `full_v1/` is a second backup that started landing on 2026-10-23; see below. The 651M figure is from before those parts. |
-| `/home/rapidstamp_data/checkpoints` | 7.2G | `parseq_reader/` (finished pretrain and first fine-tune), `parseq_reader_third/` (live fine-tune output), `ring_baseline/` (75 files), `ring_v2/` (partial, killed), `seal_reader/`. Size remeasured 2026-10-27 before the new run wrote checkpoints. |
+| `/home/rapidstamp_data/checkpoints` | 7.2G | `parseq_reader/` (finished pretrain and first fine-tune), `parseq_reader_third/` (finished third fine-tune), `ring_baseline/` (75 files), `ring_v2/` (partial, killed), `seal_reader/`. The 7.2G figure is from before `parseq_reader_third/` was written. |
 | `/home/rapidstamp_data/gold` | 20M | `seals_to_label/` (63 png + `labels.csv`), `baseline_strips/` (63 strips), `baseline_report/gold_report.json`. |
 | `/home/rapidstamp_data/incoming_v2` | 503M | `delta.zip` (263,497,928) and `part_00.zip` … `part_11.zip` (parts 00–10 are 23,068,672 each, part 11 is 9,742,536). Keep them. |
-| `/home/rapidstamp_data/logs` | 1.1M | Finished log is `parseq_reader.log` (pid file still says 52706; that process is dead). Live log is `parseq_third.log`, pid file `parseq_third.pid`. |
+| `/home/rapidstamp_data/logs` | 1.1M | Finished logs are `parseq_reader.log` (pid file still says 52706) and `parseq_third.log` (pid file still says 4633). Both processes are dead. |
 | `/home/rapidstamp_data/pretrained` | 264M | `ppocr_keys_v1.txt` (6,623 lines, 26,250 bytes), `ch_PP-OCRv4_rec_train/` plus its tar, `ch_PP-OCRv4_rec_infer/` plus its tar, `fonts/`. |
 | `/home/rapidstamp_data/ring_baseline` | 496M | `strips/train` 10,907, `strips/val` 348, `kept.jsonl` 11,255 rows, `train_list.txt`, `val_list.txt`, `meta.json`, `sample_sheet.jpg`. |
 | `/home/rapidstamp_data/ring_v2` | 589M | `strips/train` 10,839, `strips/val` 344, `kept.jsonl` now 14,711 rows, backup `kept.jsonl.bak-before-third-20261027` (11,183 rows), `kept_third_meta.json`, lists, `meta.json`, `sample_sheet.jpg`. |
@@ -192,7 +192,8 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | Arc-only unwrap (v2) | not finished | not run | Data prep finished. Training was killed around epoch 6 of 60. Checkpoints under `checkpoints/ring_v2` are partial. Do not resume and do not quote them as a result. |
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
 | PARSeq ViT-S pretrain, selected `best.pt` at 1,600,000 | 157/344, 0.83464 | 10/63, 0.80613 (verified 10/57, 0.81852; pending 0/6, 0.68849) | Chosen by val `(exact, 1−NED)`. This is the pretrain ONNX. Stage-end `last.pt` is different; see below. |
-| PARSeq ViT-S fine-tune, selected `best.pt` at 200,000 of 216,780 | 156/344, 0.84594 | 17/63, 0.84294 (verified 17/57, 0.85753; pending 0/6, 0.70439) | Chosen the same way. This is the fine-tune ONNX. The last eval is higher on gold exact and lower on val exact. Aliyun is still 55/63, 0.979. |
+| PARSeq ViT-S fine-tune, selected `best.pt` at 200,000 of 216,780 | 156/344, 0.84594 | 17/63, 0.84294 (verified 17/57, 0.85753; pending 0/6, 0.70439) | Chosen the same way. This is the first fine-tune ONNX. The last eval is higher on gold exact and lower on val exact. Aliyun is still 55/63, 0.979. |
+| PARSeq ViT-S third fine-tune, selected `best.pt` at 225,024 of 285,120 | 226/455, 0.86562 | 25/63, 0.90432 (verified 25/57, 0.91984; pending 0/6, 0.75691) | Started from the row above. `kept.jsonl` is 14,711 rows, 3,528 of them third-party. Val n is 455 because 111 third rows joined the hold-out. `last.pt` at 285,120 was not selected. |
 
 The job is finished. PID 52706 is dead. The last line of `/home/rapidstamp_data/logs/parseq_reader.log` records the fine-tune ONNX, and that file's mtime is 2026-10-23T10:46:48Z. Checkpoint choice is val `(exact, 1−NED)`, and exact is compared first, so a later step with a higher gold score does not replace `best.pt`.
 
@@ -200,8 +201,9 @@ Stage-end weights, which are `last.pt` and `eval.json`, are not the selected che
 
 - Pretrain, seen 2,000,000, `eval.json` mtime 2026-10-23T10:26:54Z: val 152/344, 1−NED 0.83983; gold 14/63, 0.82448 (verified 14/57, 0.83904; pending 0/6, 0.68615). Empty predictions 0.
 - Fine-tune, seen 216,800, `eval.json` mtime 2026-10-23T10:46:46Z: val 154/344, 1−NED 0.84429; gold 18/63, 0.84453 (verified 18/57, 0.85928; pending 0/6, 0.70439). Empty predictions 0. Log line at that step: loss 1.82116, 184.5 img/s, lr 0.
+- Third fine-tune, seen 285,120, `checkpoints/parseq_reader_third/finetune/eval.json`: val 224/455, 1−NED 0.86361; gold 25/63, 0.89971 (verified 25/57, 0.91766; pending 0/6, 0.72913). Empty predictions 0. This is `last.pt`. The selected checkpoint is the 225,024 row in the table.
 
-`train_parseq.py` reloads `best.pt` before the ONNX export, so both ONNX files are the selected checkpoints, not `last.pt`.
+`train_parseq.py` reloads `best.pt` before the ONNX export, so the ONNX files are the selected checkpoints, not `last.pt`. The third-run export is `/home/rapidstamp_data/checkpoints/parseq_reader_third/finetune/parseq_reader.onnx` (126,972,402 bytes).
 
 The table below is the snapshot that was copied while the job was still running. It stops at 1,050,016. Intermediate evals between that row and 2,000,000 were not transcribed. Do not fill them in. At the time of that snapshot the running winner was val exact 112/344 at 1,050,016, gold exact 3/63.
 
@@ -271,7 +273,10 @@ ImageNet mean `(0.485, 0.456, 0.406)`, std `(0.229, 0.224, 0.225)`. Input is RGB
 | `checkpoints/parseq_reader/pretrain/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-23T10:26:56Z. Reloaded from pretrain `best.pt`. Input `image` 3×384×384, output `tokens` int64 `(N, 26)`, dynamic batch, opset 17, `dynamo=False`. |
 | `checkpoints/parseq_reader/finetune/best.pt` | 126,668,919 | Step 200,000. mtime 2026-10-23T10:45:12Z. Selected fine-tune checkpoint. |
 | `checkpoints/parseq_reader/finetune/last.pt` | 126,668,919 | Step 216,800. mtime 2026-10-23T10:46:46Z. Stage-end weights. |
-| `checkpoints/parseq_reader/finetune/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-23T10:46:48Z. Reloaded from finetune `best.pt`. Same I/O as the pretrain ONNX. |
+| `checkpoints/parseq_reader/finetune/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-23T10:46:48Z. Reloaded from finetune `best.pt`. Same I/O as the pretrain ONNX. This is the init for the third run. |
+| `checkpoints/parseq_reader_third/finetune/best.pt` | 126,668,919 | Step 225,024 of 285,120. mtime 2026-10-27T06:45Z. Selected third fine-tune. Val 226/455, 1−NED 0.86562. Gold 25/63, 1−NED 0.90432. |
+| `checkpoints/parseq_reader_third/finetune/last.pt` | 126,668,919 | Step 285,120. mtime 2026-10-27T06:51Z. Not selected. |
+| `checkpoints/parseq_reader_third/finetune/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-27T06:51Z. Reloaded from the third `best.pt`. Same I/O as the other PARSeq ONNX files. |
 
 Direct reader: timm `vit_tiny_patch16_224` (embed 192, 3 heads) plus a 2-layer `TransformerDecoder` over 26 learned queries. Not autoregressive. An autoregressive head collapsed to always emitting 中国共产主义青年团. Do not revive it.
 
@@ -288,7 +293,7 @@ PY=/home/znsoft/miniconda3/envs/pytorch/bin/python
 
 The first job was started with `training/scripts/launch_parseq.sh`. It nohuped `train_parseq.py` with `--samples 2000000`, `--batch 32`, `--workers 6`, `--backbone vit_small_patch16_384`, `--no-checkpointing`, `--memory-fraction 0.105`, names and blocked files under `synth/`, crops `web_seals_cn_all/crops`, gold dir `gold/seals_to_label`. Log: `/home/rapidstamp_data/logs/parseq_reader.log`. Pid file: `logs/parseq_reader.pid` (still 52706; that process has exited). Its kept file did not yet contain the third-party rows. Do not launch that script again: it would repeat pretraining and write over `checkpoints/parseq_reader`.
 
-The live fine-tune was started with nohup on 2026-10-27. It loads `/home/rapidstamp_data/checkpoints/parseq_reader/finetune/best.pt` and writes a new tree, so that checkpoint is left in place. There is no resume-from-step, so `seen` starts at 0. With 14,256 train rows the step count is `int(12 * 14256 / 0.60)` = 285,120. The same augmentation applies: real probability 0.60, uniform 0.10, `augment_seal` on real crops. The copy of the command is `/home/rapidstamp_data/logs/parseq_third.cmd`.
+The third fine-tune was started with nohup on 2026-10-27 and finished the same morning. It loaded `/home/rapidstamp_data/checkpoints/parseq_reader/finetune/best.pt` and wrote a new tree, so that checkpoint is still in place. There is no resume-from-step, so `seen` started at 0. With 14,256 train rows the step count was `int(12 * 14256 / 0.60)` = 285,120. `kept.jsonl` was the 14,711-row file, 3,528 of them third-party. The same augmentation applied: real probability 0.60, uniform 0.10, `augment_seal` on real crops. The copy of the command is `/home/rapidstamp_data/logs/parseq_third.cmd`. PID 4633 has exited.
 
 ```bash
 /home/znsoft/miniconda3/envs/pytorch/bin/python -u training/scripts/train_parseq.py \
@@ -315,13 +320,13 @@ The live fine-tune was started with nohup on 2026-10-27. It loads `/home/rapidst
   --memory-fraction 0.105
 ```
 
-Log: `/home/rapidstamp_data/logs/parseq_third.log`. Pid file: `/home/rapidstamp_data/logs/parseq_third.pid` (4633). At 2026-10-27T06:24:58Z the process had been up about a minute, `seen` was 3,200, loss 1.854, 109.0 img/s, and the GPU was at 92% with 4456 MiB on that pid. The startup line was train 14,256, val 455, gold 63, blocked 544. Checkpoints land in `checkpoints/parseq_reader_third/finetune/`. Eval is every 25,000 images. Do not start a second trainer.
+Log: `/home/rapidstamp_data/logs/parseq_third.log`. Pid file: `/home/rapidstamp_data/logs/parseq_third.pid` (4633, dead). The startup line was train 14,256, val 455, gold 63, blocked 544. The log ends at seen 285,120 with the ONNX write. Selected weights are `checkpoints/parseq_reader_third/finetune/best.pt`. Do not start another trainer unless asked.
 
 Pretrain defaults in `train_parseq.py`: 2,000,000 samples, real probability 0.12, uniform probability 0.10, the rest drawn from `names.txt`. AdamW, encoder lr 1e-4, other lr 3e-4, weight decay 0.01, warmup 4,000 images then cosine, grad clip 1.0, AMP. Loss is CE (`ignore_index=0`) on a blank context plus 0.5 × CE on a second pass where 20% of content positions are replaced with random ids. Eval every 25,000 images, save every 20,000. Checkpoint choice is val `(exact, 1−NED)`, not gold. `best.pt` / `last.pt` store `model`, `step`, `val`, `gold`, `vocab_size`, `max_len`, `backbone`, `image_size`, `pretrained`.
 
 There is no resume-from-step flag. `--init` loads a state dict at build time. `--finetune-only` loads `pretrain/best.pt` when `--init` is unset. `--probe-steps N` runs N optimizer steps and returns; do not point a probe at the finished output directory. `torch.load` does not pass `weights_only=False`. If a future torch refuses the checkpoint, add that flag. Do not restart the finished job to change it.
 
-Fine-tune is chained unless `--skip-finetune` or `--finetune-only`. The first run reloaded pretrain `best.pt`, then ran `int(12 * 10839 / 0.60)` = 216,780 steps. The live run uses the same formula on 14,256 train rows, which is 285,120 steps, and loads the first fine-tune `best.pt` via `--init`. Real probability 0.60, uniform still 0.10, encoder lr 2e-5, other lr 1e-4. Real crops get `augment_seal` (full 360° rotation, perspective, blur, noise, JPEG, fade, occlusion, overlaid text). Synthetic samples are rendered on the fly.
+Fine-tune is chained unless `--skip-finetune` or `--finetune-only`. The first run reloaded pretrain `best.pt`, then ran `int(12 * 10839 / 0.60)` = 216,780 steps. The third run used the same formula on 14,256 train rows, which is 285,120 steps, and loaded the first fine-tune `best.pt` via `--init`. Real probability 0.60, uniform still 0.10, encoder lr 2e-5, other lr 1e-4. Real crops get `augment_seal` (full 360° rotation, perspective, blur, noise, JPEG, fade, occlusion, overlaid text). Synthetic samples are rendered on the fly.
 
 Renderer (`seal_render.py`): round, oval, and invoice seals; double ring; star; horizontal invoice line and a tax-id distractor; bottom code or a bottom phrase; Song, Fangsong, Hei, and Kai; stroke, ink texture, fade, double print, paper, overlaid document text. The label is the ring string only. Training always spins the seal. About 90% red ink, 10% blue. Missing glyphs fall through the font list. Upright samples were readable (radial text, tops outward, gap at the bottom).
 
@@ -342,7 +347,7 @@ $PY training/scripts/eval_direct_reader.py \
 
 The docstring example that passes `--gold .../gold` is wrong; use `seals_to_label`. Export that reader with `training/scripts/export_direct_reader.py --ckpt .../best.pt --out .../seal_reader.onnx`. The PARSeq export is the in-process `_export` in `train_parseq.py`. After it writes an ONNX, check it with onnxruntime: input `image`, output `tokens`.
 
-The live job is PID 4633. The first run's pid file is stale. To check the live one:
+Both jobs have exited. The pid files are stale. To confirm that:
 
 ```bash
 ps -p $(cat /home/rapidstamp_data/logs/parseq_third.pid) -o pid,etime,cmd
@@ -363,12 +368,12 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 - ViT-S/16 at 384 was chosen over the hybrid CNN encoder because it has ImageNet weights and, once workers are warm, runs at about 111 img/s in about 4500 MiB beside VLLM. Short probes at 4–27 img/s were startup (weight download and loading 1.5M names), not the steady rate. Do not retune the batch from a probe.
 - Gold is reported at every eval and is not used to pick checkpoints. That is why fine-tune `best.pt` is gold 17/63 while `last.pt` is gold 18/63: val exact was 156 against 154.
 - On 2026-10-27, labeled third-party recognition was merged into `web_seals_cn_all` after a phash dedupe. Detection-only and unlabeled third images were not added. The original zips and the labels backup stay.
-- Later the same day, 3,528 of those rows were appended to `ring_v2/kept.jsonl` and a fine-tune was started from `checkpoints/parseq_reader/finetune/best.pt` into `checkpoints/parseq_reader_third/`. Leave that process running.
+- Later the same day, 3,528 of those rows were appended to `ring_v2/kept.jsonl` (14,711 lines) and a fine-tune was started from `checkpoints/parseq_reader/finetune/best.pt`. It finished with selected gold 25/63 and 1−NED 0.90432. Quote `checkpoints/parseq_reader_third/finetune/best.pt`.
 
 ## Open issues and next steps
 
-1. Leave PID 4633 running through 285,120 images. It writes `checkpoints/parseq_reader_third/finetune/`. Do not launch a second trainer. When `eval.json` is from the end of that stage, record val and gold (verified and pending) here. The comparison point is the previous selected checkpoint, 17/63 and 1−NED 0.84294, and the Aliyun bar, 55/63 and 0.979.
-2. The selected fine-tune result before this run is 17/63 exact and 1−NED 0.84294. Quote `checkpoints/parseq_reader/finetune/best.pt` and its ONNX for that run. `last.pt` there is the 18/63 stage-end eval and was not selected. The new run has not produced a score yet.
+1. The third fine-tune is finished. Quote `checkpoints/parseq_reader_third/finetune/best.pt` (step 225,024): val 226/455, 1−NED 0.86562; gold 25/63, 1−NED 0.90432 (verified 25/57, 0.91984; pending 0/6, 0.75691). `last.pt` at 285,120 was not selected. The ONNX beside it was exported from `best.pt`. Aliyun remains 55/63 and 0.979. The previous selected checkpoint was 17/63 and 0.84294.
+2. Do not start another trainer unless asked. `kept.jsonl` is already the 14,711-row file used by this run.
 3. `docs/research.md` and `docs/data.md` still describe the run as in progress at the 1,050,016 snapshot. The sample sheet is `/home/rapidstamp_data/synth/sample_sheet.jpg`.
 4. The 25k through 1,050,016 table is a partial log, not the pretrain result.
 5. `docs/data.md` still describes the 2026-10-16 `/home/mayong` layout after the warning at the top. Do not follow those paths.
