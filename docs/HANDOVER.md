@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-23T08:05:31Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer.
+Updated 2026-10-27T06:15:02Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -8,19 +8,19 @@ Update this file after every meaningful step, measured result, or change to data
 
 Read the curved ring text of a Chinese seal from the whole crop, without unwrapping. The bar is the Aliyun stamp-OCR draft on the 63 user-proofread gold crops: **55/63 exact, 1−NED 0.979**. The published class-routed pipeline scores **0/63, 1−NED 0.050** on the same crops. The new model has to stay ONNX-exportable for a later C++ path. It is a separate recognizer from `models/seal_rec.onnx` and from `seal_rec_ppocr.onnx`.
 
-Still open: finish synthetic pretraining, fine-tune on the filtered real crops, and report exact match and 1−NED on val and on the 63 gold crops next to the Aliyun numbers. Do not train a second head for center text or the bottom code until ring text is near that bar.
+Synthetic pretraining and the chained fine-tune finished on 2026-10-23. The selected fine-tune checkpoint is 17/63 exact and 1−NED 0.84294 on gold, against the Aliyun bar above. Third-party labeled crops were merged into `labels.jsonl` on 2026-10-27 and have not been trained. Do not start that train unless asked. Do not train a second head for center text or the bottom code until ring text is near that bar.
 
 Headline metric, from `training/rapidstamp_train/ring_text.py` `one_ned`: mean over samples of `1 − edit_distance / max(len(pred), len(gold))`. Both strings empty scores 1. Spaces count. Do not strip. This is not Paddle `RecMetric` (`ignore_space=True`, and it keeps only CJK and alphanumerics).
 
 ## Access and hard rules
 
 - Training host: `home.rapidai.tech`, SSH port 44, user `znsoft`. The password is held by the user and is already in the operator environment as `SSHPASS`. Use `sshpass -e`. Do not write it down. Connections reset; retry.
-- Read and write only `/home/rapidstamp_data`. `/home` is `/dev/sdb`, about 1.8T, 699G used, 1.1T free, 41% at the last check.
+- Read and write only `/home/rapidstamp_data`. `/home` is `/dev/sdb`, about 1.8T, 713G used, 1.1T free, 41% at 2026-10-27T06:15:02Z.
 - `/home/mayong` is forbidden. `ls` shows a root-owned directory dated 2025-05-19. `df` of that path reports the same `/dev/sdb` as `/home`, so it is not a separate live data disk. Older notes in `docs/data.md` tell you to put large files there. Those notes are historical. Do not read it, write it, or try to recover it.
-- GPU: RTX 6000 Ada, 49140 MiB. Resident VLLM is PID 17019 (`VLLM::EngineCore`, about 42880 MiB, up since before this work). Do not kill it. Do not start a second trainer. The live reader is PID 52706 (see the pretraining section). Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean the trainer is alive.
+- GPU: RTX 6000 Ada, 49140 MiB. The reader pid file still contains 52706, and that process is dead. VLLM PID 17019 is also gone as of 2026-10-27T06:15:02Z. Do not start a trainer unless asked. Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean a trainer is alive.
 - The server tree `/home/rapidstamp_data/src/RapidStamp` is a partial copy, not a git checkout. Sync code with tar over SSH. Do not `git pull` there.
 - Do not commit the SSH password, an Aliyun APPCODE, real seal images, gold crops, name lists, fonts, or checkpoints.
-- Do not delete `incoming_v2`, the gold crops, or the ring-baseline checkpoint.
+- Do not delete `incoming_v2`, the gold crops, the ring-baseline checkpoint, the four zips under `third/`, or `web_seals_cn_all/labels.jsonl.bak-before-third-20261027`.
 
 ## Server layout
 
@@ -29,19 +29,20 @@ Inventory taken 2026-10-23T05:37:44Z. Sizes are `du -sh`. File counts are recurs
 | Path | Size | What is there |
 | --- | --- | --- |
 | `/home/rapidstamp_data/backup` | 651M plus the incoming full backup | `gold_db18.zip` (16,362,139 bytes), `web_seals_cn_all.zip` (385,220,370), `web_seals_delta_v2.zip` (263,497,928), and `gold_seals/seals_to_label/` (63 png + `labels.csv`, 64 files). `full_v1/` is a second backup that started landing on 2026-10-23; see below. The 651M figure is from before those parts. |
-| `/home/rapidstamp_data/checkpoints` | 6.7G | `parseq_reader/`, `ring_baseline/` (75 files), `ring_v2/` (partial, killed), `seal_reader/`. |
+| `/home/rapidstamp_data/checkpoints` | 7.2G | `parseq_reader/` (pretrain and finetune finished), `ring_baseline/` (75 files), `ring_v2/` (partial, killed), `seal_reader/`. Size remeasured 2026-10-27. |
 | `/home/rapidstamp_data/gold` | 20M | `seals_to_label/` (63 png + `labels.csv`), `baseline_strips/` (63 strips), `baseline_report/gold_report.json`. |
 | `/home/rapidstamp_data/incoming_v2` | 503M | `delta.zip` (263,497,928) and `part_00.zip` … `part_11.zip` (parts 00–10 are 23,068,672 each, part 11 is 9,742,536). Keep them. |
-| `/home/rapidstamp_data/logs` | 1.1M | 32 log and pid files. Live log is `parseq_reader.log`, pid file `parseq_reader.pid`. |
+| `/home/rapidstamp_data/logs` | 1.1M | 32 log and pid files at the 2026-10-23 inventory. Finished log is `parseq_reader.log`. Pid file `parseq_reader.pid` still contains 52706; that process is dead. |
 | `/home/rapidstamp_data/pretrained` | 264M | `ppocr_keys_v1.txt` (6,623 lines, 26,250 bytes), `ch_PP-OCRv4_rec_train/` plus its tar, `ch_PP-OCRv4_rec_infer/` plus its tar, `fonts/`. |
 | `/home/rapidstamp_data/ring_baseline` | 496M | `strips/train` 10,907, `strips/val` 348, `kept.jsonl` 11,255 rows, `train_list.txt`, `val_list.txt`, `meta.json`, `sample_sheet.jpg`. |
 | `/home/rapidstamp_data/ring_v2` | 589M | `strips/train` 10,839, `strips/val` 344, `kept.jsonl` 11,183 rows, lists, `meta.json`, `sample_sheet.jpg`. |
 | `/home/rapidstamp_data/src` | 417M | `PaddleOCR/` and `RapidStamp/` (partial runtime tree: `python/` and `training/` only). |
 | `/home/rapidstamp_data/synth` | 267M | Name corpus, uniform strings, blocked strings, `stats.json`, `sample_sheet.jpg`, and `src/` (public name lists). |
 | `/home/rapidstamp_data/venvs` | 3.7G | `paddleocr` only (Paddle 2.6.2, cu118). |
-| `/home/rapidstamp_data/web_seals_cn_all` | 1016M | `crops/` 15,738 png, `labels.jsonl` (11,440,722 bytes), `labels_v1.jsonl` (6,615,523 bytes, 9,085 rows), `web_seals_cn_all.zip` (385,220,370), `SHA256SUMS.txt`. |
+| `/home/rapidstamp_data/third` | 3.3G | Four original zips plus the extracted trees. See the third-data section. Remeasured 2026-10-27. |
+| `/home/rapidstamp_data/web_seals_cn_all` | 1.3G | Original `crops/` 15,738 png, plus `crops/third_rec/` 3,581 files. `labels.jsonl` is 19,319 lines (13,175,513 bytes). Backup `labels.jsonl.bak-before-third-20261027` is the previous file (11,440,722 bytes, 15,738 lines). `labels_v1.jsonl` is unchanged (6,615,523 bytes, 9,085 rows). `web_seals_cn_all.zip` is unchanged (385,220,370). Remeasured 2026-10-27. |
 
-There is no `docs/` on the server until this handover is mirrored. PyTorch is not in the data-disk venv. The reader uses `/home/znsoft/miniconda3/envs/pytorch/bin/python` (3.11.11, torch 2.8.0+cu129, timm 1.0.30). Do not pip-install Paddle into that env.
+`docs/` on the server is a copy of this repo's `docs/`, refreshed after each handover commit. PyTorch is not in the data-disk venv. The reader uses `/home/znsoft/miniconda3/envs/pytorch/bin/python` (3.11.11, torch 2.8.0+cu129, timm 1.0.30). Do not pip-install Paddle into that env.
 
 Fonts under `pretrained/fonts/`: `NotoSansCJKsc-Regular.otf` (Hei, 16,437,364), `NotoSerifCJKsc-Regular.otf` (Song, 24,543,080), `LXGWWenKaiGBLite-Regular.ttf` (Kai, 14,191,220), `zhuque/ZhuqueFangsong-Regular.ttf` (仿宋, 8,824,084) and `zhuque.zip`.
 
@@ -84,9 +85,39 @@ Restored layout under `/home/rapidstamp_data/raw_box_backup/`. Counts are files.
 
 ### `web_seals_cn_all`
 
-15,738 Aliyun-labeled crops. `labels.jsonl` keys: `batch`, `det_class`, `det_conf`, `file`, `other_texts`, `phash`, `probs` (`ring`, `other`), `query`, `raw`, `ring_text`, `roi` (`height`, `left`, `top`, `width`), `source_url`, `status`. Status 200: 14,667. Status 464: 1,071. `labels_v1.jsonl` has the same keys and is an earlier 9,085-row slice. The Aliyun payload has an ROI and no angle.
+The original file was 15,738 Aliyun-labeled crops. Those rows are unchanged: status 200 is 14,667, status 464 is 1,071. `labels.jsonl` keys on those rows: `batch`, `det_class`, `det_conf`, `file`, `other_texts`, `phash`, `probs` (`ring`, `other`), `query`, `raw`, `ring_text`, `roi` (`height`, `left`, `top`, `width`), `source_url`, `status`. `labels_v1.jsonl` has the same keys and is an earlier 9,085-row slice. It was not changed by the third merge. The Aliyun payload has an ROI and no angle.
 
-`ring_text` / `other_texts` / `probs` come from the Aliyun stamp OCR API. `det_class` and `det_conf` come from the YOLOX-Nano crop. `phash`, `query`, and `source_url` come from the scraper. These strings are drafts, not user proofreading.
+`ring_text` / `other_texts` / `probs` on the Aliyun rows come from the Aliyun stamp OCR API. `det_class` and `det_conf` come from the YOLOX-Nano crop. `phash`, `query`, and `source_url` come from the scraper. These strings are drafts, not user proofreading.
+
+On 2026-10-27 the file grew by 3,581 third-party rows, to 19,319 lines. Those rows add a `source` field. See the next section. `ring_v2/kept.jsonl` was not rebuilt, so the finished reader did not train on them.
+
+### Third-party recognition merge
+
+Source zips stayed at `/home/rapidstamp_data/third/`. `unzip` is not installed there, so they were extracted with Python `zipfile` into:
+
+- `/home/rapidstamp_data/third/rec_seal_0/seal_0/` (3,416 files)
+- `/home/rapidstamp_data/third/rec_seal_1/seal_1/` (2,266 files)
+- `/home/rapidstamp_data/third/det_seal_0/seal_0/` (3,088 files)
+- `/home/rapidstamp_data/third/no_seal_0/seal_0/` (5,000 files)
+
+Only labeled recognition was added. `rec_seal_0` is an image plus a same-name one-line `.txt` (1,708 pairs). `rec_seal_1` prefers `Label.txt` (PaddleOCR `path\tJSON`, transcription only; the points are placeholders and were not stored). 2,245 of those rows had an image. 4 `Label.txt` rows had no image and were skipped. Baidu `major.words` was the fallback and contributed 0 rows. `minor.words` and extra transcriptions went into `other_texts`. `det_seal_0` is detection boxes only. `no_seal_0` has no labels. Both were perceptual-hashed so a labeled crop could be compared with them, and neither was written as a recognition label.
+
+Duplicate rule: 64-bit DCT phash, same as the existing rows (checked on `crops/00007_3c973fa9.png` → `fa3189ca66a68b39` and `crops/00001_b74befc0.png` → `ab3194b343cccd2d`). Hamming distance 6 or less is a duplicate. One existing row had a null phash (`b4_08142_553dd9b7.png`); it was hashed from the crop. An existing label wins. Inside the new set, `rec_seal_0` is kept ahead of `rec_seal_1`. A labeled crop that only matches an unlabeled third image is kept.
+
+| Item | Count |
+| --- | --- |
+| Candidate labeled pairs | 3,953 |
+| Dropped, duplicate of an existing label | 27 |
+| Dropped, duplicate inside the new set | 345 |
+| Of those internal drops, ring text differed | 201 |
+| Added | 3,581 (`third/rec_seal_0` 1,646, `third/rec_seal_1` 1,935) |
+| `labels.jsonl` lines after | 19,319 |
+| Unlabeled det + no_seal images hashed | 6,620 |
+| Added rows also within distance 6 of an unlabeled third image | 17 |
+
+New crops are `/home/rapidstamp_data/web_seals_cn_all/crops/third_rec/`. `file` is still relative to `crops/`, for example `third_rec/rec_seal_0/0.jpg`. `source` is `third/rec_seal_0` or `third/rec_seal_1`. `batch` is `third`. `status` is 200. `roi` is the whole image. `probs.ring` is the Baidu major probability when the basename matches, otherwise null. `det_class` is empty. The previous labels file is `/home/rapidstamp_data/web_seals_cn_all/labels.jsonl.bak-before-third-20261027`. The full count table is `/home/rapidstamp_data/third/MERGE_REPORT.md`. The script is `/home/rapidstamp_data/third/merge_third_rec.py`. It refuses to append a second time.
+
+Of the added strings, 3,573 pass length 2–25 and the `ppocr_keys_v1` dictionary. 7 are longer than 25. 1 uses a character outside that dictionary. They stay in `labels.jsonl`. The current filter in `ring_text.py` also requires status 200, a non-empty ring, ring probability ≥ 0.90, and a class in the allowed set. The new rows fail that probability and class test, so rebuilding `kept.jsonl` with the current filter would drop them. Do not rebuild it, and do not start training, unless asked.
 
 ### Filtered sets
 
@@ -94,7 +125,7 @@ Filter in `training/rapidstamp_train/ring_text.py`: status 200, non-empty ring t
 
 Baseline filter (`ring_baseline/meta.json`): label-keep 11,262, then 7 out-of-dict rows dropped, dedupe removed nothing, train 10,907 / val 348. Drop reasons: empty 1,413, status 1,071, template 970, prob 878, class 77, length 67. Median gap 0°, so most strips start at 140°. Wide gap (≥ 40°) on 631 rows.
 
-Extended filter (`ring_v2/meta.json`): label-keep 11,190, template 1,042, before-dedupe 11,183, deduped 0, train 10,839 / val 344. Other reasons match the baseline (empty 1,413, status 1,071, prob 878, class 77, length 67, dict 7). This `kept.jsonl` is what the direct reader and the current pretraining use. Its keys add unwrap geometry: `angle` (always null; Aliyun has no angle), `confidence`, `file_md5`, `gap_deg`, `prob`, `r_in`, `r_out`, `roi`, `source`, `span_deg`, `split`, `start_deg`, `strip`, `strip_h`, `strip_w`, `text`, `unwrap_start`, `wide_gap`. Sources: gap 10,776, default 181, center 86, star 115, code 25. Median span 300°, median gap 80°, median strip width 960.
+Extended filter (`ring_v2/meta.json`): label-keep 11,190, template 1,042, before-dedupe 11,183, deduped 0, train 10,839 / val 344. Other reasons match the baseline (empty 1,413, status 1,071, prob 878, class 77, length 67, dict 7). This `kept.jsonl` is what the direct reader and the finished PARSeq run used. It does not include the 2026-10-27 third-party rows. Its keys add unwrap geometry: `angle` (always null; Aliyun has no angle), `confidence`, `file_md5`, `gap_deg`, `prob`, `r_in`, `r_out`, `roi`, `source`, `span_deg`, `split`, `start_deg`, `strip`, `strip_h`, `strip_w`, `text`, `unwrap_start`, `wide_gap`. Sources: gap 10,776, default 181, center 86, star 115, code 25. Median span 300°, median gap 80°, median strip width 960.
 
 Baseline `kept.jsonl` keys are the shorter set: `det_class`, `file`, `file_md5`, `gap_deg`, `prob`, `r_in`, `r_out`, `split`, `start_deg`, `strip`, `text`, `wide_gap`.
 
@@ -140,9 +171,19 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 | Unwrap baseline, 20 epochs | 16/348, 0.224 | 0/63, 0.24173 (verified 0/57, 0.23913; pending 0/6, 0.26641) | Paddle RecMetric best acc 0.083, norm_edit_dis 0.405 at epoch 20. That acc drops spaces. Empty predictions 44. Gold strips were the old full-circle unwrap, 48×640, resized to width 320. `gold_report.json` has top-level `images_found` 0 because `--images` was not passed; the inner `missing` is 0, so all 63 joined. |
 | Arc-only unwrap (v2) | not finished | not run | Data prep finished. Training was killed around epoch 6 of 60. Checkpoints under `checkpoints/ring_v2` are partial. Do not resume and do not quote them as a result. |
 | ViT-Tiny direct reader, epoch 33 of 40 | 9/344, 0.31392 | 0/63, 0.18681 (verified 0/57, 0.19851; pending 0/6, 0.07564) | Best by val exact. Predictions are mostly generic shells. One val near-miss: 吉南省人力资源和社会保障厅 vs 吉林省人力资源和社会保障行. |
-| PARSeq ViT-S pretrain, in progress | see below | see below | Not a result yet. |
+| PARSeq ViT-S pretrain, selected `best.pt` at 1,600,000 | 157/344, 0.83464 | 10/63, 0.80613 (verified 10/57, 0.81852; pending 0/6, 0.68849) | Chosen by val `(exact, 1−NED)`. This is the pretrain ONNX. Stage-end `last.pt` is different; see below. |
+| PARSeq ViT-S fine-tune, selected `best.pt` at 200,000 of 216,780 | 156/344, 0.84594 | 17/63, 0.84294 (verified 17/57, 0.85753; pending 0/6, 0.70439) | Chosen the same way. This is the fine-tune ONNX. The last eval is higher on gold exact and lower on val exact. Aliyun is still 55/63, 0.979. |
 
-Pretraining snapshot, job still running, log tail at 2026-10-23T08:05:31Z (PID 52706): seen 1,055,008, loss 3.903, 110.4 img/s. Eval so far (1−NED). Latest val exact is 112/344 at 1,050,016, up from 106/344 at 1,025,024, so this row wins `(exact, 1−NED)`. Gold exact is 3/63.
+The job is finished. PID 52706 is dead. The last line of `/home/rapidstamp_data/logs/parseq_reader.log` records the fine-tune ONNX, and that file's mtime is 2026-10-23T10:46:48Z. Checkpoint choice is val `(exact, 1−NED)`, and exact is compared first, so a later step with a higher gold score does not replace `best.pt`.
+
+Stage-end weights, which are `last.pt` and `eval.json`, are not the selected checkpoints:
+
+- Pretrain, seen 2,000,000, `eval.json` mtime 2026-10-23T10:26:54Z: val 152/344, 1−NED 0.83983; gold 14/63, 0.82448 (verified 14/57, 0.83904; pending 0/6, 0.68615). Empty predictions 0.
+- Fine-tune, seen 216,800, `eval.json` mtime 2026-10-23T10:46:46Z: val 154/344, 1−NED 0.84429; gold 18/63, 0.84453 (verified 18/57, 0.85928; pending 0/6, 0.70439). Empty predictions 0. Log line at that step: loss 1.82116, 184.5 img/s, lr 0.
+
+`train_parseq.py` reloads `best.pt` before the ONNX export, so both ONNX files are the selected checkpoints, not `last.pt`.
+
+The table below is the snapshot that was copied while the job was still running. It stops at 1,050,016. Intermediate evals between that row and 2,000,000 were not transcribed. Do not fill them in. At the time of that snapshot the running winner was val exact 112/344 at 1,050,016, gold exact 3/63.
 
 | Seen | Val 1−NED (n=344) | Gold 1−NED (n=63) | Verified (57) | Pending (6) |
 | --- | --- | --- | --- | --- |
@@ -189,7 +230,7 @@ Pretraining snapshot, job still running, log tail at 2026-10-23T08:05:31Z (PID 5
 | 1,025,024 | 0.78073 | 0.71124 | 0.71848 | 0.64252 |
 | 1,050,016 | 0.78676 | 0.71887 | 0.72813 | 0.63085 |
 
-`eval.json` on disk matches the 1,050,016 row. Val exact is 112/344, so this row wins `(exact, 1−NED)` over 106/344 at 1,025,024. Gold exact is 3/63 (verified 3/57, pending 0/6). Gold 1−NED is 0.71887. Gold exact hits so far are 1 at 625,024, 700,000, 725,024, and 1,000,000, 4 at 800,000 and 950,016, 2 at 825,024 and 975,008, 3 at 850,016, 875,008, 900,000, and 1,050,016, and 5 at 925,024 and 1,025,024. Predictions are still mostly generic shells outside those gold hits. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`) and is falling. These rows are early. The zero-shot number is the eval written when the 2,000,000-sample stage ends.
+That 1,050,016 paragraph was true only while the job was running. The on-disk `pretrain/eval.json` is now the 2,000,000 row above, and `pretrain/best.pt` is the 1,600,000 checkpoint. Gold exact hits recorded in this table are 1 at 625,024, 700,000, 725,024, and 1,000,000, 4 at 800,000 and 950,016, 2 at 825,024 and 975,008, 3 at 850,016, 875,008, 900,000, and 1,050,016, and 5 at 925,024 and 1,025,024. Hits after 1,050,016 were not copied row by row. Loss started near 10 (two-pass CE; `log(6627) ≈ 8.8`).
 
 ## Checkpoints and ONNX
 
@@ -205,8 +246,12 @@ ImageNet mean `(0.485, 0.456, 0.406)`, std `(0.229, 0.224, 0.225)`. Input is RGB
 | `checkpoints/ring_v2/best_accuracy.pdparams` and `latest.*` | 92,071,446 each | Killed around epoch 6. Not a model to deploy. `best_model/` holds `model.pdparams` and an inference trio. |
 | `checkpoints/seal_reader/best.pt` | 32,045,116 | Epoch 33. Also `last.pt` (same size) and `eval.json`. |
 | `checkpoints/seal_reader/seal_reader.onnx` | 32,231,644 | Input `image` float NCHW, dynamic batch, 3×224×224. Output `tokens` int64 `(N, 26)`. Opset 17, `dynamo=False`. |
-| `checkpoints/parseq_reader/pretrain/best.pt` and `last.pt` | 126,668,855 each | Updating during the run. `eval.json` is the latest eval, not necessarily the final zero-shot. |
-| `checkpoints/parseq_reader/pretrain/parseq_reader.onnx` | not written yet | Export runs at the end of the stage: input `image` 3×384×384, output `tokens` int64 `(N, 26)`, dynamic batch, opset 17, `dynamo=False`. A failed export is printed and does not kill training. Fine-tune writes `checkpoints/parseq_reader/finetune/parseq_reader.onnx`. |
+| `checkpoints/parseq_reader/pretrain/best.pt` | 126,668,919 | Step 1,600,000. mtime 2026-10-23T09:27:05Z. Selected pretrain checkpoint. |
+| `checkpoints/parseq_reader/pretrain/last.pt` | 126,668,919 | Step 2,000,000. mtime 2026-10-23T10:26:54Z. Stage-end weights, not the selected checkpoint. |
+| `checkpoints/parseq_reader/pretrain/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-23T10:26:56Z. Reloaded from pretrain `best.pt`. Input `image` 3×384×384, output `tokens` int64 `(N, 26)`, dynamic batch, opset 17, `dynamo=False`. |
+| `checkpoints/parseq_reader/finetune/best.pt` | 126,668,919 | Step 200,000. mtime 2026-10-23T10:45:12Z. Selected fine-tune checkpoint. |
+| `checkpoints/parseq_reader/finetune/last.pt` | 126,668,919 | Step 216,800. mtime 2026-10-23T10:46:46Z. Stage-end weights. |
+| `checkpoints/parseq_reader/finetune/parseq_reader.onnx` | 126,972,402 | mtime 2026-10-23T10:46:48Z. Reloaded from finetune `best.pt`. Same I/O as the pretrain ONNX. |
 
 Direct reader: timm `vit_tiny_patch16_224` (embed 192, 3 heads) plus a 2-layer `TransformerDecoder` over 26 learned queries. Not autoregressive. An autoregressive head collapsed to always emitting 中国共产主义青年团. Do not revive it.
 
@@ -221,11 +266,11 @@ export PYTHONPATH=/home/rapidstamp_data/src/RapidStamp/python/src:/home/rapidsta
 PY=/home/znsoft/miniconda3/envs/pytorch/bin/python
 ```
 
-The live job was started with `training/scripts/launch_parseq.sh`. It nohups `train_parseq.py` with `--samples 2000000`, `--batch 32`, `--workers 6`, `--backbone vit_small_patch16_384`, `--no-checkpointing`, `--memory-fraction 0.105`, names and blocked files under `synth/`, kept rows `ring_v2/kept.jsonl`, crops `web_seals_cn_all/crops`, gold dir `gold/seals_to_label`. Log: `/home/rapidstamp_data/logs/parseq_reader.log`. Pid file: `logs/parseq_reader.pid`.
+The finished job was started with `training/scripts/launch_parseq.sh`. It nohuped `train_parseq.py` with `--samples 2000000`, `--batch 32`, `--workers 6`, `--backbone vit_small_patch16_384`, `--no-checkpointing`, `--memory-fraction 0.105`, names and blocked files under `synth/`, kept rows `ring_v2/kept.jsonl`, crops `web_seals_cn_all/crops`, gold dir `gold/seals_to_label`. Log: `/home/rapidstamp_data/logs/parseq_reader.log`. Pid file: `logs/parseq_reader.pid` (still 52706; the process has exited). Do not launch it again unless asked. The third-party rows are not in `kept.jsonl`.
 
 Pretrain defaults in `train_parseq.py`: 2,000,000 samples, real probability 0.12, uniform probability 0.10, the rest drawn from `names.txt`. AdamW, encoder lr 1e-4, other lr 3e-4, weight decay 0.01, warmup 4,000 images then cosine, grad clip 1.0, AMP. Loss is CE (`ignore_index=0`) on a blank context plus 0.5 × CE on a second pass where 20% of content positions are replaced with random ids. Eval every 25,000 images, save every 20,000. Checkpoint choice is val `(exact, 1−NED)`, not gold. `best.pt` / `last.pt` store `model`, `step`, `val`, `gold`, `vocab_size`, `max_len`, `backbone`, `image_size`, `pretrained`.
 
-There is no resume-from-step flag. `--init` loads a state dict at build time. `--finetune-only` loads `pretrain/best.pt` when `--init` is unset. `--probe-steps N` runs N optimizer steps and returns; do not point a probe at the live output directory. `torch.load` does not pass `weights_only=False`. If a future torch refuses the checkpoint, add that flag. Do not restart the live job to change it.
+There is no resume-from-step flag. `--init` loads a state dict at build time. `--finetune-only` loads `pretrain/best.pt` when `--init` is unset. `--probe-steps N` runs N optimizer steps and returns; do not point a probe at the finished output directory. `torch.load` does not pass `weights_only=False`. If a future torch refuses the checkpoint, add that flag. Do not restart the finished job to change it.
 
 Fine-tune is chained unless `--skip-finetune`. It reloads pretrain `best.pt`, then runs `int(12 * n_real / 0.60)` steps. With 10,839 real train rows that is 216,780 steps. Real probability 0.60, uniform still 0.10, encoder lr 2e-5, other lr 1e-4. Real crops get `augment_seal` (full 360° rotation, perspective, blur, noise, JPEG, fade, occlusion, overlaid text). Synthetic samples are rendered on the fly.
 
@@ -248,7 +293,7 @@ $PY training/scripts/eval_direct_reader.py \
 
 The docstring example that passes `--gold .../gold` is wrong; use `seals_to_label`. Export that reader with `training/scripts/export_direct_reader.py --ckpt .../best.pt --out .../seal_reader.onnx`. The PARSeq export is the in-process `_export` in `train_parseq.py`. After it writes an ONNX, check it with onnxruntime: input `image`, output `tokens`.
 
-Watch the live job without touching it:
+The job is not running. To confirm that, and to read the finished log:
 
 ```bash
 ps -p $(cat /home/rapidstamp_data/logs/parseq_reader.pid) -o pid,etime,cmd
@@ -256,9 +301,9 @@ tail -n 3 /home/rapidstamp_data/logs/parseq_reader.log
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
 ```
 
-At about 111 img/s, 2,000,000 samples is roughly five hours from the start (about 05:26 UTC on 2026-10-23), then about half an hour of fine-tune. That is a rate observation, not a schedule. Memory fraction 0.105 keeps the trainer near 4500 MiB so VLLM can stay.
+Steady pretrain rate was about 111 img/s. The fine-tune log ended near 184 img/s on the real-data mix. Memory fraction 0.105 kept the trainer near 4500 MiB. Those are observations from the finished run, not a reason to start another one.
 
-DataLoader workers use spawn. At process shutdown you may see `Exception ignored` and `worker killed by signal: Aborted`, and the traceback mentions `popen_fork.py` even though the context is spawn. That has happened after a clean exit. A worker dying mid-run will take the main process down. Do not restart the live job because of the shutdown message.
+DataLoader workers use spawn. At process shutdown you may see `Exception ignored` and `worker killed by signal: Aborted`, and the traceback mentions `popen_fork.py` even though the context is spawn. That has happened after a clean exit. A worker dying mid-run will take the main process down. Do not restart a finished job because of the shutdown message.
 
 ## Decisions
 
@@ -267,17 +312,18 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 - The first direct reader (ViT-Tiny, 224, learned queries) was trained to completion and does not approach Aliyun. Errors are generic company and bureau shells, not a single repeated string. That is why the autoregressive head was abandoned and why scale moved to synthetic pretraining.
 - Synthetic pretraining, then real fine-tuning, is the track the user chose after that result. The corpus blocks val and gold strings. The renderer is a new one (`seal_render.py`); it does not import the older closed-charset synthesizer.
 - ViT-S/16 at 384 was chosen over the hybrid CNN encoder because it has ImageNet weights and, once workers are warm, runs at about 111 img/s in about 4500 MiB beside VLLM. Short probes at 4–27 img/s were startup (weight download and loading 1.5M names), not the steady rate. Do not retune the batch from a probe.
-- Gold is reported at every eval and is not used to pick checkpoints.
+- Gold is reported at every eval and is not used to pick checkpoints. That is why fine-tune `best.pt` is gold 17/63 while `last.pt` is gold 18/63: val exact was 156 against 154.
+- On 2026-10-27, labeled third-party recognition was merged into `web_seals_cn_all` after a phash dedupe. Detection-only and unlabeled third images were not added. Training was not started. The original zips and the labels backup stay.
 
 ## Open issues and next steps
 
-1. Leave PID 52706 running through 2,000,000 samples. It chains fine-tune by itself. Do not launch a second trainer.
-2. When pretrain `eval.json` is from the end of the stage, that is the zero-shot report (val and gold, verified and pending) against Aliyun 55/63 and 0.979. Record it here and in `docs/research.md` / `docs/data.md`. The sample sheet is `/home/rapidstamp_data/synth/sample_sheet.jpg`.
-3. When fine-tune finishes, record its val and gold numbers the same way. If the in-process ONNX export failed, export again and check the file with onnxruntime. Write the byte size and the path here.
-4. The 25k/50k/75k rows above are not the pretrain result.
+1. Do not start training on the third-party rows unless asked. `ring_v2/kept.jsonl` does not contain them, and the current filter would drop them because `probs.ring` is null and `det_class` is empty.
+2. The selected fine-tune result is 17/63 exact and 1−NED 0.84294, against Aliyun 55/63 and 0.979. Quote `finetune/best.pt` and its ONNX. `last.pt` is the 18/63 stage-end eval and was not selected.
+3. `docs/research.md` and `docs/data.md` still describe the run as in progress at the 1,050,016 snapshot. The sample sheet is `/home/rapidstamp_data/synth/sample_sheet.jpg`.
+4. The 25k through 1,050,016 table is a partial log, not the pretrain result.
 5. `docs/data.md` still describes the 2026-10-16 `/home/mayong` layout after the warning at the top. Do not follow those paths.
 6. Center text and the bottom code stay out of scope until ring text is near the Aliyun bar.
-7. `torch.load` may need `weights_only=False` on a later PyTorch. There is still no mid-pretrain resume.
-8. After each of the events above, update this file, commit it on `main`, and refresh `/home/rapidstamp_data/docs/*.md`.
+7. `torch.load` may need `weights_only=False` on a later PyTorch. There is still no mid-run resume.
+8. After each meaningful step, update this file, commit it on `main`, and refresh `/home/rapidstamp_data/docs/*.md`.
 
 Code on `main` for this track starts at `fb7b45d` (synthetic pretraining). Earlier direct-reader commits are `85cc0c7`, `edb34ed`, `d8cd585`, and the score note `e347e6e`.
