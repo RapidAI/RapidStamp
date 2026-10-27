@@ -36,6 +36,7 @@ sys.path.insert(0, str(ROOT / "python" / "src"))
 sys.path.insert(0, str(ROOT / "training"))
 
 from rapidstamp_train.direct_aug import augment_seal, list_images, load_charset, match_gold_image, pad_square  # noqa: E402
+from rapidstamp_train.hard_aug import augment_hard  # noqa: E402
 from rapidstamp_train.name_corpus import load_blocked, sample_uniform  # noqa: E402
 from rapidstamp_train.parseq_reader import (  # noqa: E402
     IMAGENET_MEAN,
@@ -133,10 +134,14 @@ class MixedSeals(Dataset):
         uniform_prob: float,
         length: int,
         augment_real: bool,
+        hard_rows: list[dict] | None = None,
+        hard_prob: float = 0.0,
     ):
         self.name_path = str(name_path)
         self._names: list[str] | None = None
         self.real_rows = real_rows
+        self.hard_rows = hard_rows or []
+        self.hard_prob = hard_prob
         self.crops = crops
         self.font_paths = font_paths
         self.charset = charset
@@ -169,11 +174,14 @@ class MixedSeals(Dataset):
         rng = random.Random()
         roll = rng.random()
         if self.real_rows and roll < self.real_prob:
-            row = self.real_rows[rng.randrange(len(self.real_rows))]
+            use_hard = self.hard_rows and rng.random() < self.hard_prob
+            pool = self.hard_rows if use_hard else self.real_rows
+            row = pool[rng.randrange(len(pool))]
             with Image.open(self.crops / row["file"]) as image:
                 canvas = pad_square(image)
             if self.augment_real:
-                canvas = augment_seal(canvas, rng, Path(self.font_paths[0]) if self.font_paths else None)
+                font = Path(self.font_paths[0]) if self.font_paths else None
+                canvas = augment_hard(canvas, rng, font) if use_hard else augment_seal(canvas, rng, font)
             target = self._target(row["text"])
             if target is None:
                 raise RuntimeError("real label does not encode")
@@ -409,6 +417,8 @@ def main() -> None:
     parser.add_argument("--skip-finetune", action="store_true")
     parser.add_argument("--finetune-only", action="store_true")
     parser.add_argument("--probe-steps", type=int, default=0)
+    parser.add_argument("--hard-list", type=Path, default=None)
+    parser.add_argument("--hard-prob", type=float, default=0.0)
     args = parser.parse_args()
 
     try:
@@ -538,6 +548,17 @@ def main() -> None:
         if best_path.is_file():
             model.load_state_dict(torch.load(best_path, map_location=device)["model"])
     finetune_steps = int(args.finetune_epochs * max(len(real_train), 1) / max(args.finetune_real_prob, 0.1))
+    hard_rows = []
+    if args.hard_list is not None and args.hard_prob > 0:
+        train_files = {row["file"] for row in real_train}
+        with args.hard_list.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                if item.get("file") in train_files and charset.encode(str(item.get("text") or "")):
+                    hard_rows.append({"file": item["file"], "text": item["text"]})
+        print(json.dumps({"hard_rows": len(hard_rows), "hard_prob": args.hard_prob}), flush=True)
     finetune_set = MixedSeals(
         args.names,
         real_train,
@@ -549,6 +570,8 @@ def main() -> None:
         args.uniform_prob,
         length=max(finetune_steps, args.batch),
         augment_real=True,
+        hard_rows=hard_rows,
+        hard_prob=args.hard_prob,
     )
     args.encoder_lr = args.finetune_encoder_lr
     args.lr = args.finetune_lr
