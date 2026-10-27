@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-27T10:15:00Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
+Updated 2026-10-27T10:36:00Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -8,7 +8,7 @@ Update this file after every meaningful step, measured result, or change to data
 
 Read the curved ring text of a Chinese seal from the whole crop, without unwrapping. The bar is the Aliyun stamp-OCR draft on the 63 user-proofread gold crops: **55/63 exact, 1−NED 0.979**. The published class-routed pipeline scores **0/63, 1−NED 0.050** on the same crops. The new model has to stay ONNX-exportable for a later C++ path. It is a separate recognizer from `models/seal_rec.onnx` and from `seal_rec_ppocr.onnx`.
 
-Synthetic pretraining and the first fine-tune finished on 2026-10-23 at 17/63 exact and 1−NED 0.84294 on gold. The third-data fine-tune finished at 25/63 and 0.90432. The first mix fine-tune, which did not include `no_seal_0`, finished with selected val 229/455 and gold 25/63, 1−NED 0.90006. The second mix, which includes `no_seal_0`, finished the same day. Selected weights are `checkpoints/parseq_reader_mix2/finetune/best.pt` at step 400,000: val 285/591, 1−NED 0.85177; gold 25/63, 1−NED 0.90795. No trainer is running. Do not start another one until asked. Do not train a second head for center text or the bottom code until ring text is near the Aliyun bar. A free SoMark OXR-1.0 pass on the same 63 crops scored 1/63 exact on the longest Stamp line (1−NED 0.11131). Keep Aliyun for labeling. Details are in `docs/oxr_seal_eval.md`.
+Synthetic pretraining and the first fine-tune finished on 2026-10-23 at 17/63 exact and 1−NED 0.84294 on gold. The third-data fine-tune finished at 25/63 and 0.90432. The first mix fine-tune, which did not include `no_seal_0`, finished with selected val 229/455 and gold 25/63, 1−NED 0.90006. The second mix, which includes `no_seal_0`, finished the same day. Selected weights are `checkpoints/parseq_reader_mix2/finetune/best.pt` at step 400,000: val 285/591, 1−NED 0.85177; gold 25/63, 1−NED 0.90795. LabelMe boxes from `det_seal_0` were cropped, detector-filtered, Aliyun-labeled, and merged (kept is now 20,211). A 3-epoch fine-tune from that mix2 checkpoint is running as PID 11314 into `checkpoints/parseq_reader_mix3/`. Do not start a second trainer. Do not train a second head for center text or the bottom code until ring text is near the Aliyun bar. A free SoMark OXR-1.0 pass on the same 63 crops scored 1/63 exact on the longest Stamp line (1−NED 0.11131). Keep Aliyun for labeling. Details are in `docs/oxr_seal_eval.md`.
 
 Headline metric, from `training/rapidstamp_train/ring_text.py` `one_ned`: mean over samples of `1 − edit_distance / max(len(pred), len(gold))`. Both strings empty scores 1. Spaces count. Do not strip. This is not Paddle `RecMetric` (`ignore_space=True`, and it keeps only CJK and alphanumerics).
 
@@ -17,10 +17,10 @@ Headline metric, from `training/rapidstamp_train/ring_text.py` `one_ned`: mean o
 - Training host: `home.rapidai.tech`, SSH port 44, user `znsoft`. The password is held by the user and is already in the operator environment as `SSHPASS`. Use `sshpass -e`. Do not write it down. Connections reset; retry.
 - Read and write only `/home/rapidstamp_data`. `/home` is `/dev/sdb`, about 1.8T, 713G used, 1.1T free, 41% at 2026-10-27T06:15:02Z.
 - `/home/mayong` is forbidden. `ls` shows a root-owned directory dated 2025-05-19. `df` of that path reports the same `/dev/sdb` as `/home`, so it is not a separate live data disk. Older notes in `docs/data.md` tell you to put large files there. Those notes are historical. Do not read it, write it, or try to recover it.
-- GPU: RTX 6000 Ada, 49140 MiB. No trainer is running. Pid file `parseq_mix2.pid` still says 7263; that process exited after the stage-end ONNX export. Pid files `parseq_mix.pid` (6252), `parseq_third.pid` (4633), and `parseq_reader.pid` (52706) are stale. VLLM PID 17019 is also gone. Do not start another trainer until asked. Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean a trainer is alive.
+- GPU: RTX 6000 Ada, 49140 MiB. The live fine-tune is PID 11314 (`logs/parseq_mix3.pid`), about 4630 MiB at startup. Pid file `parseq_mix2.pid` still says 7263; that process exited after its ONNX export. Pid files `parseq_mix.pid` (6252), `parseq_third.pid` (4633), and `parseq_reader.pid` (52706) are stale. The det_seal Aliyun labeler pid file `det_seal_aliyun.pid` still says 10467; that process finished. VLLM PID 17019 is also gone. Do not start a second trainer. Check `ps -p <pid>`. A `pgrep` that matches an `ssh bash -c` line does not mean a trainer is alive.
 - The server tree `/home/rapidstamp_data/src/RapidStamp` is a partial copy, not a git checkout. Sync code with tar over SSH. Do not `git pull` there.
 - Do not commit the SSH password, an Aliyun APPCODE, real seal images, gold crops, name lists, fonts, or checkpoints. The live codes are only in `/home/rapidstamp_data/logs/aliyun_keys.env` (mode 600). Counters are the integers in `logs/aliyun_calls.txt` and `logs/aliyun_calls_key2.txt`. Do not copy those files into git.
-- Do not delete `incoming_v2`, the gold crops, the ring-baseline checkpoint, the four zips under `third/`, `web_seals_cn_all/labels.jsonl.bak-before-third-20261027`, `ring_v2/kept.jsonl.bak-before-third-20261027`, or `checkpoints/parseq_reader/finetune/best.pt`.
+- Do not delete `incoming_v2`, the gold crops, the ring-baseline checkpoint, the four zips under `third/`, `web_seals_cn_all/labels.jsonl.bak-before-third-20261027`, `web_seals_cn_all/labels.jsonl.bak-before-noseal-20261027`, `web_seals_cn_all/labels.jsonl.bak-before-detseal-20261027`, `ring_v2/kept.jsonl.bak-before-third-20261027`, `ring_v2/kept.jsonl.bak-before-noseal-20261027`, `ring_v2/kept.jsonl.bak-before-detseal-20261027`, or `checkpoints/parseq_reader/finetune/best.pt`, `checkpoints/parseq_reader_mix/finetune/best.pt`, or `checkpoints/parseq_reader_mix2/finetune/best.pt`. Do not rerun `third/rebuild_kept.py`. It still rebuilds from the pre-third backup and would drop the later rows.
 
 ## Server layout
 
@@ -200,6 +200,8 @@ For each query it scrapes Bing, Baidu, and 360 image search, crops seals with th
 
 `training/scripts/collect_web_seals.py` is an older, smaller scraper. On 2026-10-16 it kept 401 images (360: 350, Bing: 51, Baidu: 0). Its docstring still points at `/home/mayong`. It is not the 15,738-crop Aliyun pipeline.
 
+The box one-shots are on this host only as backups: `raw_box_backup/web_seals_v2_raw/collect.py`, `raw_box_backup/web_seals_v2_foreign/collect.py`, and `raw_box_backup/misc/scrape.py`. They write `urls.json` and images under `/workspace` paths from the collection box. They are not a live server job, and they were not started on 2026-10-27. New seals this round came from the already-downloaded `det_seal_0` LabelMe set. Leave web collection on the box.
+
 ## Experiments
 
 | Run | Val exact / 1−NED | Gold exact / 1−NED | Notes |
@@ -345,9 +347,15 @@ The first mix fine-tune started at 2026-10-27T07:39Z from the third `best.pt` an
 
 The second mix fine-tune started at 2026-10-27T08:42Z from `checkpoints/parseq_reader_mix/finetune/best.pt` into `checkpoints/parseq_reader_mix2/`, so the earlier checkpoints stay. Real probability is 0.55. `kept.jsonl` is the 18,971-row file (train 18,380, val 591), which includes the `no_seal_0` rows. Synthetic names are the 19,999 strings in `synth_names/names_for_mix2.txt` (one of the 20,000 rendered names matched a val or gold string and was left out). Step count is `int(12 * 18380 / 0.55)` = 401,018. The run stopped at seen 401,024 because the batch size is 32. The command copy is `logs/parseq_mix2.cmd`.
 
-Log: `/home/rapidstamp_data/logs/parseq_mix2.log`. Pid file: `logs/parseq_mix2.pid` still says 7263; that process has exited. Checkpoint files are dated 2026-10-27 09:24 on the server clock. Selected weights are `checkpoints/parseq_reader_mix2/finetune/best.pt` at step 400,000: val 285/591, 1−NED 0.85177; gold 25/63, 1−NED 0.90795 (verified 25/57, 0.93060; pending 0/6, 0.69276). `last.pt` at step 401,024 tied those val numbers and was not selected. The ONNX (`parseq_reader.onnx`, 126,972,402 bytes) was exported after reloading `best.pt`. Quote `best.pt`. Do not start another trainer until asked.
+Log: `/home/rapidstamp_data/logs/parseq_mix2.log`. Pid file: `logs/parseq_mix2.pid` still says 7263; that process has exited. Checkpoint files are dated 2026-10-27 09:24 on the server clock. Selected weights are `checkpoints/parseq_reader_mix2/finetune/best.pt` at step 400,000: val 285/591, 1−NED 0.85177; gold 25/63, 1−NED 0.90795 (verified 25/57, 0.93060; pending 0/6, 0.69276). `last.pt` at step 401,024 tied those val numbers and was not selected. The ONNX (`parseq_reader.onnx`, 126,972,402 bytes) was exported after reloading `best.pt`. Quote `best.pt`.
 
-SoMark OXR-1.0 was scored the same morning on the free API, without a local GPU load. Joined Stamp text is 0/63 exact, 1−NED 0.08984. The longest Stamp line is 1/63, 1−NED 0.11131. Keep Aliyun for labeling. The write-up is `docs/oxr_seal_eval.md`. Raw responses are `/home/rapidstamp_data/gold/oxr_eval/` and stay off git.
+`det_seal_0` was turned into recognition crops on 2026-10-27. `seal_0/` has 1,620 jpg and 1,467 LabelMe json. All 2,007 rectangles were cropped to `third/det_seal_0/crops/` with a 4px pad (`crop_labelme.py`). 153 jpg had no json and were left uncropped. `seal_det.onnx` at 0.25 kept 1,957 and rejected 50 (`prefilter_summary.json`; lowest keep 0.251313, highest reject 0.249596; kept classes round_official 1,916, invoice 15, square_personal 13, rect_stamp 10, notary 3). Aliyun then labeled only the kept crops (`label_det.py`, log `logs/det_seal_aliyun.log`). Key1 was already at 19,483, past the soft cap of 19,480, so every call used key2. The labeler pid 10467 finished: 1,942 status 200, 15 status 464, 0 other. Key2 counter went from 3,329 to 5,286. Key1 stayed 19,483. Status 464 was not merged.
+
+Phash dedupe (Hamming ≤ 6, existing label wins) appended 1,295 labels. `labels.jsonl` is 25,139 lines. Backup `labels.jsonl.bak-before-detseal-20261027` is the previous 23,844. Crops are `web_seals_cn_all/crops/third_rec/det_seal_0/` (1,295 png). Of the status-200 rows, 1,819 used `ring_text` and 123 fell back to `general_text`. Duplicates: 605 against the existing set, 42 inside this set. `kept.jsonl` kept its previous bytes as a prefix and grew from 18,971 to 20,211. Added kept rows: 1,240 (train 1,203, val 37). Drops: val_text 42, length_short 11, template 1, charset 1. Backup `kept.jsonl.bak-before-detseal-20261027`. Report: `third/det_seal_0/MERGE_REPORT.md`. Loader counts after the merge: train 19,583, val 628.
+
+The third mix is a short fine-tune, 3 epochs rather than 12, from `checkpoints/parseq_reader_mix2/finetune/best.pt` into `checkpoints/parseq_reader_mix3/`. Real probability 0.55. Names are `synth_names/names_for_mix3.txt` (19,999 lines; none of the mix2 names matched a new val or gold string). Step count is `int(3 * 19583 / 0.55)` = 106,816. Command copy `logs/parseq_mix3.cmd`. Log `logs/parseq_mix3.log`. Pid file `logs/parseq_mix3.pid` is 11314, started 2026-10-27T10:34Z. Startup JSON: names 19,999, blocked 708, train 19,583, val 628, gold 63, gold_missing 0, fonts 4, vocab 6,627. At about 45 seconds, seen 4,800, loss 1.593, 161 img/s, 4630 MiB. Leave it running. Do not launch another trainer. When it finishes, quote `best.pt`, not `last.pt`.
+
+SoMark OXR-1.0 was scored the same morning on the free API, without a local GPU load. Do not use OXR to label. Joined Stamp text is 0/63 exact, 1−NED 0.08984. The longest Stamp line is 1/63, 1−NED 0.11131. Keep Aliyun for labeling. The write-up is `docs/oxr_seal_eval.md`. Raw responses are `/home/rapidstamp_data/gold/oxr_eval/` and stay off git.
 
 Pretrain defaults in `train_parseq.py`: 2,000,000 samples, real probability 0.12, uniform probability 0.10, the rest drawn from `names.txt`. AdamW, encoder lr 1e-4, other lr 3e-4, weight decay 0.01, warmup 4,000 images then cosine, grad clip 1.0, AMP. Loss is CE (`ignore_index=0`) on a blank context plus 0.5 × CE on a second pass where 20% of content positions are replaced with random ids. Eval every 25,000 images, save every 20,000. Checkpoint choice is val `(exact, 1−NED)`, not gold. `best.pt` / `last.pt` store `model`, `step`, `val`, `gold`, `vocab_size`, `max_len`, `backbone`, `image_size`, `pretrained`.
 
@@ -374,11 +382,11 @@ $PY training/scripts/eval_direct_reader.py \
 
 The docstring example that passes `--gold .../gold` is wrong; use `seals_to_label`. Export that reader with `training/scripts/export_direct_reader.py --ckpt .../best.pt --out .../seal_reader.onnx`. The PARSeq export is the in-process `_export` in `train_parseq.py`. After it writes an ONNX, check it with onnxruntime: input `image`, output `tokens`.
 
-No trainer is running. `parseq_mix2.pid` still names 7263, and that pid has exited. To confirm:
+The live job is PID 11314. `parseq_mix2.pid` still names 7263, and that pid has exited. To confirm the live one:
 
 ```bash
-ps -p $(cat /home/rapidstamp_data/logs/parseq_mix2.pid) -o pid,etime,cmd
-tail -n 3 /home/rapidstamp_data/logs/parseq_mix2.log
+ps -p $(cat /home/rapidstamp_data/logs/parseq_mix3.pid) -o pid,etime,cmd
+tail -n 3 /home/rapidstamp_data/logs/parseq_mix3.log
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
 ```
 
@@ -397,12 +405,13 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 - On 2026-10-27, labeled third-party recognition was merged into `web_seals_cn_all` after a phash dedupe. Detection-only and unlabeled third images were not added. The original zips and the labels backup stay.
 - Later the same day, 3,528 of those rows were appended to `ring_v2/kept.jsonl` (14,711 lines) and a fine-tune was started from `checkpoints/parseq_reader/finetune/best.pt`. It finished with selected gold 25/63 and 1−NED 0.90432. Quote `checkpoints/parseq_reader_third/finetune/best.pt`.
 - `no_seal_0` was filtered with `seal_det.onnx` at 0.25 (4,900 kept, 100 rejected). Aliyun labeled the kept set. 4,525 unique status-200 crops were merged, and 4,260 of them passed the kept-list text rules. The first mix run did not see them. The second mix run did, and it has finished.
-- Free SoMark OXR-1.0 was tried as a labeler on the 63 gold crops (2026-10-27). Longest Stamp line is 1/63 exact, 1−NED 0.11131. Keep Aliyun. See `docs/oxr_seal_eval.md`.
+- Free SoMark OXR-1.0 was tried as a labeler on the 63 gold crops (2026-10-27). Longest Stamp line is 1/63 exact, 1−NED 0.11131. Keep Aliyun. See `docs/oxr_seal_eval.md`. Do not label with OXR.
+- `det_seal_0` LabelMe rectangles were cropped, passed through `seal_det.onnx` at 0.25 (1,957 kept, 50 rejected), and Aliyun-labeled on key2 only. 1,295 unique labels and 1,240 kept rows were appended. Web collection stays on the box.
 
 ## Open issues and next steps
 
-1. The second mix finished. Quote `checkpoints/parseq_reader_mix2/finetune/best.pt` (step 400,000): val 285/591, 1−NED 0.85177; gold 25/63, 1−NED 0.90795. `last.pt` at 401,024 tied val and was not selected. Do not launch another trainer until asked. Aliyun remains 55/63, 0.979. The first mix checkpoint remains val 229/455, gold 25/63, 1−NED 0.90006.
-2. The `no_seal_0` merge is done. Do not append those rows again. HTTP 464 stayed out of `labels.jsonl` and `kept.jsonl`.
+1. Leave PID 11314 running through 106,816 images. It writes `checkpoints/parseq_reader_mix3/finetune/`. Do not launch a second trainer. When it finishes, record val and gold here and quote `best.pt`. The comparison points are mix2 `best.pt` (val 285/591, gold 25/63, 1−NED 0.90795) and Aliyun (55/63, 0.979).
+2. The `det_seal_0` merge and the `no_seal_0` merge are done. Do not append either set again. HTTP 464 stayed out of `labels.jsonl` and `kept.jsonl`. Do not rerun `third/rebuild_kept.py`.
 3. The third fine-tune result remains `checkpoints/parseq_reader_third/finetune/best.pt` (step 225,024): val 226/455, 1−NED 0.86562; gold 25/63, 1−NED 0.90432. `last.pt` at 285,120 was not selected.
 4. `docs/research.md` and `docs/data.md` still describe the run as in progress at the 1,050,016 snapshot. The sample sheet is `/home/rapidstamp_data/synth/sample_sheet.jpg`.
 5. The 25k through 1,050,016 table is a partial log, not the pretrain result.
