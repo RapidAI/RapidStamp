@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import timm
 
 IMAGE_SIZE = 384
@@ -70,16 +71,23 @@ class ParseqReader(nn.Module):
         backbone: str = "vit_small_patch16_384",
         pretrained: bool = True,
         checkpointing: bool = True,
+        img_size: int = IMAGE_SIZE,
     ):
         super().__init__()
         self.vocab_size = int(vocab_size)
         self.max_len = int(max_len)
         self.backbone_name = backbone
+        self.image_size = int(img_size)
         if backbone == "hybrid384":
             self.encoder = HybridEncoder()
             width = self.encoder.embed_dim
         else:
-            self.encoder = timm.create_model(backbone, pretrained=pretrained, num_classes=0)
+            self.encoder = timm.create_model(
+                backbone,
+                pretrained=pretrained,
+                num_classes=0,
+                img_size=self.image_size,
+            )
             width = int(self.encoder.embed_dim)
             if checkpointing and hasattr(self.encoder, "set_grad_checkpointing"):
                 self.encoder.set_grad_checkpointing(True)
@@ -118,3 +126,34 @@ class ParseqReader(nn.Module):
 
 def ids_to_text(rows: torch.Tensor, charset) -> list[str]:
     return [charset.decode(row.tolist()) for row in rows]
+
+
+def resample_pos_embed(pos: torch.Tensor, new_shape: tuple[int, ...]) -> torch.Tensor:
+    """Bicubic resize of a ViT position grid. The class token stays put.
+
+    384 input is 24×24 patches plus one class token (577). 512 input is 32×32
+    plus the class token (1025). Every other vl1 weight keeps its shape.
+    """
+    if pos.shape == new_shape:
+        return pos
+    if pos.ndim != 3 or pos.shape[0] != 1 or new_shape[0] != 1 or pos.shape[2] != new_shape[2]:
+        raise RuntimeError(f"cannot resample pos embed {tuple(pos.shape)} -> {new_shape}")
+    cls_token, grid = pos[:, :1], pos[:, 1:]
+    old = int(round(grid.shape[1] ** 0.5))
+    new = int(round((new_shape[1] - 1) ** 0.5))
+    if old * old != grid.shape[1] or new * new != new_shape[1] - 1:
+        raise RuntimeError(f"position grid is not square: {tuple(pos.shape)} -> {new_shape}")
+    grid = grid.reshape(1, old, old, pos.shape[2]).permute(0, 3, 1, 2)
+    grid = F.interpolate(grid, size=(new, new), mode="bicubic", align_corners=False)
+    grid = grid.permute(0, 2, 3, 1).reshape(1, new * new, pos.shape[2])
+    return torch.cat([cls_token, grid], dim=1)
+
+
+def load_reader_weights(model: nn.Module, state: dict) -> None:
+    """Load a reader state dict, resizing only the ViT position grid when needed."""
+    current = model.state_dict()
+    key = "encoder.pos_embed"
+    if key in state and key in current and tuple(state[key].shape) != tuple(current[key].shape):
+        state = dict(state)
+        state[key] = resample_pos_embed(state[key], tuple(current[key].shape))
+    model.load_state_dict(state)

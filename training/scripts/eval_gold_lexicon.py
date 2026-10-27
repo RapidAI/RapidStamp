@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "training" / "scripts"))
 
 from rapidstamp_train.direct_aug import load_charset  # noqa: E402
 from rapidstamp_train.lexicon_decode import NameLM, constrained_text  # noqa: E402
-from rapidstamp_train.parseq_reader import ParseqReader  # noqa: E402
+from rapidstamp_train.parseq_reader import ParseqReader, load_reader_weights  # noqa: E402
 from rapidstamp_train.ring_text import one_ned, summarize_pairs  # noqa: E402
 from train_parseq import EvalCrops, gold_rows  # noqa: E402
 
@@ -64,17 +64,25 @@ def main() -> None:
     names = load_names(args.names, blocked)
     lm = NameLM(names)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ckpt = torch.load(args.ckpt, map_location="cpu")
+    backbone = ckpt.get("backbone") or "vit_small_patch16_384"
+    image_size = int(ckpt.get("image_size") or 384)
     model = ParseqReader(
         len(charset),
         charset.max_len,
-        backbone="vit_small_patch16_384",
+        backbone=backbone,
         pretrained=False,
         checkpointing=False,
+        img_size=image_size,
     )
-    ckpt = torch.load(args.ckpt, map_location="cpu")
-    model.load_state_dict(ckpt["model"])
+    load_reader_weights(model, ckpt["model"])
     model.to(device).eval()
-    loader = DataLoader(EvalCrops(rows, None, charset), batch_size=16, shuffle=False, num_workers=0)
+    loader = DataLoader(
+        EvalCrops(rows, None, charset, image_size=image_size),
+        batch_size=16,
+        shuffle=False,
+        num_workers=0,
+    )
     stored = []
     with torch.inference_mode():
         for images, _texts in loader:

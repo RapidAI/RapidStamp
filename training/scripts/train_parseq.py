@@ -44,6 +44,7 @@ from rapidstamp_train.parseq_reader import (  # noqa: E402
     IMAGE_SIZE,
     ParseqReader,
     ids_to_text,
+    load_reader_weights,
 )
 from rapidstamp_train.ring_text import summarize_pairs  # noqa: E402
 from rapidstamp_train.seal_render import FontBank, list_fonts, render_seal  # noqa: E402
@@ -58,8 +59,8 @@ def _bank(paths: list[str]) -> FontBank:
     return _FONTS
 
 
-def to_tensor(image: Image.Image) -> torch.Tensor:
-    image = pad_square(image).resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
+def to_tensor(image: Image.Image, image_size: int = IMAGE_SIZE) -> torch.Tensor:
+    image = pad_square(image).resize((image_size, image_size), Image.BILINEAR)
     arr = np.asarray(image).astype(np.float32) / 255.0
     mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
     std = np.asarray(IMAGENET_STD, dtype=np.float32)
@@ -136,12 +137,14 @@ class MixedSeals(Dataset):
         augment_real: bool,
         hard_rows: list[dict] | None = None,
         hard_prob: float = 0.0,
+        image_size: int = IMAGE_SIZE,
     ):
         self.name_path = str(name_path)
         self._names: list[str] | None = None
         self.real_rows = real_rows
         self.hard_rows = hard_rows or []
         self.hard_prob = hard_prob
+        self.image_size = int(image_size)
         self.crops = crops
         self.font_paths = font_paths
         self.charset = charset
@@ -185,7 +188,7 @@ class MixedSeals(Dataset):
             target = self._target(row["text"])
             if target is None:
                 raise RuntimeError("real label does not encode")
-            return to_tensor(canvas), target
+            return to_tensor(canvas, self.image_size), target
         if roll < self.real_prob + self.uniform_prob:
             text = sample_uniform(rng, self.charset, self.blocked)
         else:
@@ -195,7 +198,7 @@ class MixedSeals(Dataset):
         target = self._target(text)
         if target is None:
             raise RuntimeError("synthetic label does not encode")
-        return to_tensor(image), target
+        return to_tensor(image, self.image_size), target
 
     def __getitem__(self, index: int):
         last = None
@@ -208,10 +211,11 @@ class MixedSeals(Dataset):
 
 
 class EvalCrops(Dataset):
-    def __init__(self, rows: list[dict], crops: Path | None, charset):
+    def __init__(self, rows: list[dict], crops: Path | None, charset, image_size: int = IMAGE_SIZE):
         self.rows = rows
         self.crops = crops
         self.charset = charset
+        self.image_size = int(image_size)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -221,7 +225,7 @@ class EvalCrops(Dataset):
         path = Path(row["abs"]) if row.get("abs") else self.crops / row["file"]
         with Image.open(path) as image:
             canvas = pad_square(image)
-        return to_tensor(canvas), row["text"]
+        return to_tensor(canvas, self.image_size), row["text"]
 
 
 @torch.inference_mode()
@@ -245,9 +249,14 @@ def _score_group(pairs: list[tuple[str, str]]) -> dict:
 
 
 @torch.inference_mode()
-def evaluate_gold(model, rows: list[dict], charset, device, batch: int) -> dict:
+def evaluate_gold(model, rows: list[dict], charset, device, batch: int, image_size: int = IMAGE_SIZE) -> dict:
     model.eval()
-    loader = DataLoader(EvalCrops(rows, None, charset), batch_size=batch, shuffle=False, num_workers=0)
+    loader = DataLoader(
+        EvalCrops(rows, None, charset, image_size=image_size),
+        batch_size=batch,
+        shuffle=False,
+        num_workers=0,
+    )
     grouped: dict[str, list[tuple[str, str]]] = {}
     offset = 0
     all_pairs = []
@@ -295,7 +304,7 @@ def save_checkpoint(path: Path, model, step: int, args, val: dict | None, gold: 
             "vocab_size": len(args.charset) if hasattr(args, "charset") else None,
             "max_len": args.max_len,
             "backbone": args.backbone,
-            "image_size": IMAGE_SIZE,
+            "image_size": args.image_size,
             "pretrained": args.pretrained,
         },
         path,
@@ -354,7 +363,7 @@ def run_stage(args, model, data, loader, val_loader, gold, device, stage: str, s
             save_checkpoint(out / "last.pt", model, seen, args, None, None)
         if seen % args.eval_every < images.shape[0] or seen >= steps:
             val = evaluate(model, val_loader, args.charset, device)
-            gold_report = evaluate_gold(model, gold, args.charset, device, args.batch)
+            gold_report = evaluate_gold(model, gold, args.charset, device, args.batch, args.image_size)
             report = {"stage": stage, "seen": seen, "val": val, "gold": gold_report}
             print(json.dumps(report, ensure_ascii=False), flush=True)
             with log_path.open("a", encoding="utf-8") as handle:
@@ -376,10 +385,11 @@ def build_model(args, device) -> ParseqReader:
         backbone=args.backbone,
         pretrained=args.pretrained,
         checkpointing=args.checkpointing,
+        img_size=args.image_size,
     )
     if args.init:
         ckpt = torch.load(args.init, map_location="cpu")
-        model.load_state_dict(ckpt["model"])
+        load_reader_weights(model, ckpt["model"])
     return model.to(device)
 
 
@@ -395,6 +405,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--blocked", type=Path, default=None)
     parser.add_argument("--backbone", default="vit_small_patch16_384")
+    parser.add_argument("--image-size", type=int, default=IMAGE_SIZE)
     parser.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--init", type=Path, default=None)
     parser.add_argument("--samples", type=int, default=2_000_000)
@@ -425,6 +436,8 @@ def main() -> None:
         mp.set_start_method("spawn", force=True)
     except RuntimeError:
         pass
+    if args.image_size % 16 != 0:
+        raise SystemExit(f"image size {args.image_size} is not a multiple of the patch size 16")
     charset = load_charset(args.dict)
     args.charset = charset
     args.max_len = charset.max_len
@@ -448,6 +461,8 @@ def main() -> None:
                 "gold_missing": missing,
                 "fonts": len(font_paths),
                 "vocab": len(charset),
+                "image_size": args.image_size,
+                "backbone": args.backbone,
             },
             ensure_ascii=False,
         ),
@@ -467,9 +482,10 @@ def main() -> None:
         args.uniform_prob,
         length=max(args.samples, args.batch),
         augment_real=True,
+        image_size=args.image_size,
     )
     val_loader = DataLoader(
-        EvalCrops(real_val, args.crops, charset),
+        EvalCrops(real_val, args.crops, charset, image_size=args.image_size),
         batch_size=args.batch,
         shuffle=False,
         num_workers=0,
@@ -572,6 +588,7 @@ def main() -> None:
         augment_real=True,
         hard_rows=hard_rows,
         hard_prob=args.hard_prob,
+        image_size=args.image_size,
     )
     args.encoder_lr = args.finetune_encoder_lr
     args.lr = args.finetune_lr
@@ -625,8 +642,9 @@ def _export(model, path: Path, args) -> None:
             backbone=args.backbone,
             pretrained=False,
             checkpointing=False,
+            img_size=args.image_size,
         )
-        replica.load_state_dict(model.state_dict())
+        load_reader_weights(replica, model.state_dict())
         replica.eval()
 
         class _Greedy(torch.nn.Module):
@@ -638,7 +656,7 @@ def _export(model, path: Path, args) -> None:
                 return self.reader.tokens(image)
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        dummy = torch.zeros(1, 3, IMAGE_SIZE, IMAGE_SIZE)
+        dummy = torch.zeros(1, 3, args.image_size, args.image_size)
         torch.onnx.export(
             _Greedy(replica),
             (dummy,),

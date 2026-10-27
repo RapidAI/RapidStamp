@@ -34,4 +34,4 @@ Hard rows are train crops only. Verified confusion characters and 4-grams of the
 
 Selected weights are `best.pt` at step 25,024: val 303/665, 1−NED 0.83532; gold **27/63**, 1−NED **0.90308** (verified 27/57, 0.92288; pending 0/6, 0.71499). `last.pt` at step 37,376 was not selected (val 300/665; gold 27/63, 1−NED 0.90546). Exact is 2 above the prior 25/63. Gold 1−NED is below vl1's 0.91142, and val exact fell from 313 to 303. The same lexicon settings on this checkpoint stay at 27/63 and raise 1−NED only to 0.90935.
 
-Keep vl1 `best.pt` for greedy 1−NED. Use the alpha 0.4 / tau 4 rescore on that checkpoint when the extra exact matches matter (28/63, 0.91516). The reader is already ViT-S/16 at 384. A larger backbone or a higher resolution was not started.
+Keep vl1 `best.pt` for greedy 1−NED (25/63). Use the alpha 0.4 / tau 4 rescore on that checkpoint when the extra exact matches matter (28/63, 0.91516). A later run, `checkpoints/parseq_reader_large/`, keeps this ViT-S and raises the input to 512. Quote these two numbers until that run beats them.
