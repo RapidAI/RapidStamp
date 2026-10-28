@@ -1,6 +1,6 @@
 # RapidStamp ring-text handover
 
-Updated 2026-10-28T01:22:59Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
+Updated 2026-10-28T01:26:00Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
 
@@ -424,6 +424,10 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 - PaddleOCR-VL-1.6 seal task, first line, is 46/63 exact and 1−NED 0.96565 on gold. Good crops keep that first line when it looks like a place or organization name. Poor crops and failed name checks use Aliyun. Existing Aliyun labels stay. See `docs/vl_label_policy.md` and `docs/paddleocr_vl_seal_eval.md`.
 - vl1 greedy gold misses are mostly one-character substitutions. A name-trigram rescore (alpha 0.4, tau 4) scores 28/63 and 1−NED 0.91516. The 512 run's selected greedy score is 26/63 and 1−NED 0.91354. The lexicon number is still higher. See `docs/hardlex_gold.md`.
 
+## China place-name lexicon
+
+VL first-line checks can use `/home/rapidstamp_data/lexicons/china_place_names/`. `places_all.txt` has 36,199 unique names. `places_by_level.jsonl` is the 省/市/区县/乡镇 table. `PLACEHOLDER.txt` is kept, with a copy at `lexicons/PLACEHOLDER.txt.bak`. The checker is `check_place.py`. Actions are `accept`, `correct`, and `aliyun`. Correct only when the fix is confident: a unique missing parent city (`西夏区` → `银川市西夏区`) or a broken organization suffix (`有公司` → `有限公司`). Send the crop to Aliyun when two real place names are confusable (`扬州` / `杭州`), when the error is inside the organization name (`兴太` / `兴大`), or when the image is poor. Do not rewrite a label Aliyun already wrote. The rule is also in `lexicons/china_place_names/POLICY.md`.
+
 ## Open issues and next steps
 
 1. `parseq_reader_large` finished. Quote `checkpoints/parseq_reader_large/finetune/best.pt` (step 325,024) for greedy gold: val 330/665, 1−NED 0.84575; gold 26/63, 1−NED 0.91354. `last.pt` at step 448,352 was not selected. Best eval-with-lexicon stays the vl1 rescore, 28/63 and 1−NED 0.91516 (alpha 0.4, tau 4); it was not run on the 512 checkpoint. ViT-B/16 at 384 is training as pid 52406 into `checkpoints/parseq_reader_vitb/`, step target 112,085, encoder initialized from the AugReg ImageNet file. Do not start a second trainer. hardlex `best.pt` is 27/63 and 1−NED 0.90308. Aliyun remains 55/63, 0.979.
@@ -435,5 +439,6 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 7. Center text and the bottom code stay out of scope until ring text is near the Aliyun bar.
 8. `torch.load` may need `weights_only=False` on a later PyTorch. There is still no mid-run resume.
 9. After each meaningful step, update this file, commit it on `main`, and refresh `/home/rapidstamp_data/docs/*.md`.
+10. VL first-line proofreading can use `lexicons/china_place_names/`. Confident place or suffix fixes stay local. Ambiguous place names and organization-character errors go to Aliyun. Do not rewrite existing Aliyun labels.
 
 Code on `main` for this track starts at `fb7b45d` (synthetic pretraining). Earlier direct-reader commits are `85cc0c7`, `edb34ed`, `d8cd585`, and the score note `e347e6e`.
