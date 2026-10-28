@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import multiprocessing as mp
+import os
 import random
 import sys
 import time
@@ -138,6 +139,7 @@ class MixedSeals(Dataset):
         hard_rows: list[dict] | None = None,
         hard_prob: float = 0.0,
         image_size: int = IMAGE_SIZE,
+        synth_dir: Path | None = None,
     ):
         self.name_path = str(name_path)
         self._names: list[str] | None = None
@@ -145,6 +147,9 @@ class MixedSeals(Dataset):
         self.hard_rows = hard_rows or []
         self.hard_prob = hard_prob
         self.image_size = int(image_size)
+        self.synth_dir = str(synth_dir) if synth_dir else ""
+        self._saved = 0
+        self._shard = None
         self.crops = crops
         self.font_paths = font_paths
         self.charset = charset
@@ -198,7 +203,25 @@ class MixedSeals(Dataset):
         target = self._target(text)
         if target is None:
             raise RuntimeError("synthetic label does not encode")
+        kind = "uniform" if roll < self.real_prob + self.uniform_prob else "name"
+        if self.synth_dir:
+            image = self._keep_synth(image, text, kind)
         return to_tensor(image, self.image_size), target
+
+    def _keep_synth(self, image: Image.Image, text: str, kind: str) -> Image.Image:
+        """Write the exact 384 canvas the reader trains on. Real crops are already on disk."""
+        canvas = pad_square(image).resize((self.image_size, self.image_size), Image.BILINEAR)
+        root = Path(self.synth_dir)
+        self._saved += 1
+        stem = f"{os.getpid()}_{self._saved:07d}"
+        relative = f"images/{stem}.png"
+        canvas.save(root / relative, format="PNG")
+        if self._shard is None:
+            self._shard = (root / "shards" / f"{os.getpid()}.jsonl").open("a", encoding="utf-8")
+        self._shard.write(json.dumps({"file": relative, "text": text, "kind": kind}, ensure_ascii=False) + "\n")
+        if self._saved % 32 == 0:
+            self._shard.flush()
+        return canvas
 
     def __getitem__(self, index: int):
         last = None
@@ -430,6 +453,7 @@ def main() -> None:
     parser.add_argument("--probe-steps", type=int, default=0)
     parser.add_argument("--hard-list", type=Path, default=None)
     parser.add_argument("--hard-prob", type=float, default=0.0)
+    parser.add_argument("--synth-save", type=Path, default=None)
     args = parser.parse_args()
 
     try:
@@ -463,6 +487,7 @@ def main() -> None:
                 "vocab": len(charset),
                 "image_size": args.image_size,
                 "backbone": args.backbone,
+                "synth_save": str(args.synth_save) if args.synth_save else "",
             },
             ensure_ascii=False,
         ),
@@ -470,6 +495,9 @@ def main() -> None:
     )
     if missing:
         raise SystemExit(f"{missing} gold images missing")
+    if args.synth_save is not None:
+        (args.synth_save / "images").mkdir(parents=True, exist_ok=True)
+        (args.synth_save / "shards").mkdir(parents=True, exist_ok=True)
 
     pretrain_set = MixedSeals(
         args.names,
@@ -483,6 +511,7 @@ def main() -> None:
         length=max(args.samples, args.batch),
         augment_real=True,
         image_size=args.image_size,
+        synth_dir=args.synth_save,
     )
     val_loader = DataLoader(
         EvalCrops(real_val, args.crops, charset, image_size=args.image_size),
