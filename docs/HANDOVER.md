@@ -496,3 +496,47 @@ Label noise on the 164 single candidates (hard-biased sample, not a pool-wide ra
   - low44: prod 28|29, nogold 23|24, gs 19|22, gs2 22|24
   - multi8 mean best 1-NED (greedy): prod .345, nogold .287, gs .251, gs2 .283 (lex .312)
 - Conclusion: v2 removes the v1 low-contrast regression (back to nogold level) but does not help long names or unseen; synth-style alone is not the lever. Production unchanged. Next ideas: long-name fix likely needs decoder max-len/aspect (ring unwrap resolution) rather than more synth; multi-seal needs detector-side separation.
+
+## Overnight wrap-up (2026-10-31 ~04:36-05:30 Asia/Shanghai)
+
+### 1. Cross-vote label cleaning (label_clean/cross_vote.py, TAG 20261030)
+- Input `label_clean/pool_preds_20261030.jsonl` (19065 rows; large 325024 / vitb_finetune 425024 / nogold 375008). Log: `label_clean/cross_vote_20261030.log`.
+- Tiers (all 19065): clean 9638 / likely_keep 1759 / likely_fix 1544 / conflict 6124. kept:train 18184 = 9330/1660/1496/5698; kept:val 573 = 251/60/38/224; supplement:new 308 = 57/39/10/202.
+- By source: aliyun-family 14922 = 6851/1346/1387/5338; rec_seal(third) 3371 = 2500/338/123/410; vl 772 = 287/75/34/376.
+- Gold v2 validation (n=82, excl. orig63+multi): clean 12 (12 label-ok), likely_keep 4 (4 ok), likely_fix 9 (2 label-ok, 7 proposal-ok), conflict 57 (36 label-ok, 2 proposal-ok). label_wrong 28, **all 28 flagged** (none fell into clean/likely_keep). File: `label_clean/gold_validation_20261030.json`.
+- Review queue `label_clean/review_20261030/review.csv`: **250 rows** (229 conflict + 21 likely_fix), with images.
+- Cleaned copies (originals untouched):
+  - `ring_v2/kept_nogold_vote_strict_20261030.jsonl` 11301 rows / `..._vote_fix_20261030.jsonl` 12835 rows (src kept_nogold 18757)
+  - `labels/supplement_nogold_vote_strict_20261030.jsonl` 96 / `..._vote_fix_20261030.jsonl` 106 (src 308)
+
+### 2. Long-name len32 reader eval (gold_v2/eval_len32_20261030.json)
+exact greedy|lex on gold v2 (227 single):
+
+| model | all227 | unseen59 | long45 | seen105 | orig63 | 1-NED lex all |
+|---|---|---|---|---|---|---|
+| production large (325024) | 84\|91 | 18\|16 | 4\|8 | 40\|45 | 26\|30 | 0.8388 |
+| nogold (375008) | 75\|80 | 19\|19 | 2\|3 | 32\|34 | 24\|27 | 0.8117 |
+| nogold_len32 (295136) | 65\|70 | 18\|20 | 2\|0 | 28\|28 | 19\|22 | 0.8113 |
+
+Long-name 1-NED lex: prod 0.7776 / nogold 0.7223 / len32 0.7167. **len32 did not help long names; production unchanged.**
+
+### 3. Detector-first multi-seal (gold_rescreen/det_multi.py, PAD=2 UNION=1, score 0.25 nms 0.45)
+16 seals / 8 multi images, exact / mean 1-NED: large greedy 3/0.6582, lex 4/0.6626; nogold 4/0.6434, 4/0.6439; len32 4/0.6184, 4/0.6281 (whole-crop baseline best 1-NED ~0.345).
+Detector on 227 singles: 1 box 220, 0 box 3, 2 boxes 4. Negatives (8): 6 got a box (gc2_117/139/161/170/175/178), 2 none.
+Outputs: `gold_v2/eval_multi_3m_u_p2_20261031.json` (identical to `..._p2_s0.25_n0.45_20261031.json`), logs `logs/det_multi_3m_*_20261031.log`.
+
+### 4. TrOCR diagnosis (gold_rescreen/trocr_diag.py) and v2 retrain
+- v1 (`checkpoints/trocr_seal_base`, 8 ep / 6760 steps) val exact peaked 0.0506.
+- Generation config correct (dec_start 101 / eos 102 / pad 0); default vs explicit generate identical. Teacher-forced on 128 val: loss 1.856, token-acc 0.721, seq exact 0.047 -> same as free-run, so NOT a decoding bug.
+- Shuffled images: loss 3.249 / tok-acc 0.561; blank images: 2.587 / 0.613 -> model is mostly a Chinese LM; errors concentrate on first/place-name chars (e.g. gold 揭阳市揭东区 -> 重阳市揭东区).
+- Root cause: weak visual grounding — randomly-initialised BERT cross-attention (28.4M params) trained at decoder LR for only 6760 steps. Contributing: 289 train labels with "#" extra lines (val/gold are ring-only), 404 UNK rows.
+- Fix `gold_rescreen/trocr_seal_v2.py`: ring-only labels, drop tokenizer-roundtrip mismatches (train 26628, UNK 0), x-attn LR 3e-4 / enc 5e-5 / dec 1e-4, warmup 1500, 30 epochs (24960 steps, ~130 img/s, ~2 h), explicit generation_config.
+- Running via nohup `logs/trocr_seal_base_v2.sh` (started 2026-10-31 04:44 CST): train log `logs/trocr_seal_base_v2.log` -> eval `logs/trocr_seal_base_v2_eval.log` -> `gold_v2/eval_trocr_v2_20261031.json`; `.end` marker when done. Output `checkpoints/trocr_seal_base_v2/{best,last}`.
+
+### 5. CSD (ChineseSealDataset) test split as 2nd external eval (gold_rescreen/csd_eval.py)
+- Data `external/csd/raw/ChineseSealDataset/` (train 828 / val 200 / test 458 images, 4032x3024). Crops from seal_location +4% margin -> `external/csd/crops_test/`. Ring text = **longest** shape label (v1 used most polygon points, but ring and center text both have 20 points, so ties sometimes picked the center text such as 研究专用; v1 log kept as `logs/csd_eval_20261031_v1_ringbug.log`, not valid). JSON utf-8-sig with gb18030 fallback.
+- Names overlapping gold v2 dropped (name-disjoint); lex LM blocks gold v2 + CSD names. Groups: seen/unseen name vs train labels, difficulty, len>=14, color.
+- Output `external/csd/eval_csd_test_20261031.json`, preds `external/csd/preds_csd_test_20261031.jsonl`, log `logs/csd_eval_20261031.log`.
+- Stats: 5454 seals (458 images, ~12 stamp instances of the same seal per image), 119 dropped for gold-name overlap -> **5335 eval crops, only 61 unique names, 0 seen in train labels**, all len<14. Difficulty easy 2087 / normal 2302 / difficult 1065. Colours black/blue/red (CSD is photographed, many non-red seals -> large domain gap).
+- Status: re-run (fixed ring selection) started 2026-10-31 05:23 CST with nohup; results -> `external/csd/eval_csd_test_20261031.json`. See the follow-up section below if it has been filled in.
+
