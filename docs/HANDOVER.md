@@ -452,3 +452,47 @@ VL first-line checks can use `/home/rapidstamp_data/lexicons/china_place_names/`
 10. VL first-line proofreading can use `lexicons/china_place_names/`. Confident place or suffix fixes stay local. Ambiguous place names and organization-character errors go to Aliyun. Do not rewrite existing Aliyun labels.
 
 Code on `main` for this track starts at `fb7b45d` (synthetic pretraining). Earlier direct-reader commits are `85cc0c7`, `edb34ed`, `d8cd585`, and the score note `e347e6e`.
+
+## Gold candidates v2 (2026-10-30)
+
+The first 180 candidates had many crops too small or blurry for a person to read. They moved to `gold_candidates_v1_old/` and were not deleted. `gold_candidates/` now holds v2: 180 crops, 45 per bucket (`long_name`, `model_hard`, `low_contrast`, `odd_shape`), with `review.csv`/`review.jsonl` (prefilled text, source, model prediction, size, sharpness; `user_text`/`user_status` empty for review), `summary.json`, and `contact_sheet_sample.jpg`. Readability floor: short side >= 80 px, Laplacian variance after resizing short side to 128 >= 400, gray std >= 18; dHash distance to any of the 63 gold crops >= 5. The `blur` bucket is replaced by `model_hard`: readable (short >= 100, sharpness >= 700) crops where the S@512 `checkpoints/parseq_reader_large/finetune/best.pt` plus name-trigram rescore (alpha 0.4, tau 4) disagrees with the label or VL disagrees with the label, 1-NED >= 0.3, val/new rows only (40 val, 5 supplement). From v1: long_name kept 43, low_contrast 0, odd_shape 23, blur 0; 114 were added from `ring_v2/kept.jsonl` and `labels/supplement_20261029.jsonl`. No Aliyun calls. Scripts and pool scores (21,566 crops) are in `gold_rescreen/`. Prefilled text is not verified; gold is not merged until the user reviews it.
+
+## Gold v2 (2026-10-30)
+
+The user reviewed the 180 v2 candidates by editing `prefilled_text` in `gold_candidates_verified/review.csv` (`user_text`/`user_status` were left empty). Conventions: `(wu fa shi bie)` full-width parens = unreadable, `(fei yin zhang)` = not a seal, `/` = two seals in one crop, `#` = extra lines (center/bottom); the ring text is the part before the first `#`. Result: 164 single-seal usable, 8 multi-seal (all odd_shape), 3 unreadable (gc2_117/139/170), 5 non-seal (gc2_161/165/175/178/180, listed in `gold_v2/excluded.jsonl`, useful as detector negatives). `gold_v2/` = original 63 (bucket `orig63`, copied from `gold/seals_to_label`, `gold/` untouched) + 172 verified crops; `labels.jsonl` has `text` (ring), `full_text`, `texts`, `multi`, `bucket`, `split_in_pool`. Backup `backup/gold_v2_20261030/`. Build script `gold_rescreen/build_gold_v2.py`, eval `gold_rescreen/eval_gold_v2.py`, results `gold_v2/eval_20261030.json`, per-image preds `gold_v2/preds_20261030.jsonl`.
+
+Single-seal metric is on 227 rows (63 + 164); multi rows are scored separately (no model hits either seal, 0/8). Lexicon = name trigram alpha 0.4 tau 4 with all gold_v2 ring strings removed from the names file. All-single exact / 1-NED: large (S@512) greedy 84/227 0.834, lex 91/227 0.839 (best); vl1 lex 83 0.825; mix3 lex 87 0.818; hardlex lex 84 0.809; ViT-B finetune lex 84 0.812; ViT-B pretrain lex 67 0.778; third lex 62 0.754. S@512 lex leads on every bucket except model_hard (selected by S@512 disagreement, biased against it; ViT-B finetune lex 19/45 there vs 13/45). 105 of the 164 new crops were in the train split of `ring_v2/kept.jsonl` with the unverified label, so they must be removed from training before the next fine-tune; unseen-only subset (59): large lex 16/59 0.813, ViT-B finetune lex 20/59 0.787.
+
+Label noise on the 164 single candidates (hard-biased sample, not a pool-wide rate): ring text wrong in 64 (39%), center line missing only in 39, identical in 61. By source: Aliyun-family (gap/default/star/center/aliyun_*) 30/71 ring wrong, third-party labels 29/66, VL first line 5/27. Per bucket ring wrong: long_name 25/45, low_contrast 16/44, model_hard 16/45, odd_shape 7/30. Note: `select_v2.py` text-skip strings were mangled to `????` by the Windows pipe, so the "copy-identical" skip filter did not apply; no impact on the reviewed set.
+
+## Nogold refinetune + gold-style synth (2026-10-30, in progress)
+- Cleaning: `gold_rescreen/clean_nogold.py` (report `gold_v2/clean_nogold_20261030.json`). Removes rows whose file is a gold v2 image, dHash<5 to any of the 243 gold v2/excluded images, or same ring text with dHash<12. Originals untouched; backups in `backup/*.bak_nogold_20261030`; outputs `*_nogold_20261030.jsonl`.
+  - ring_v2/kept: 21,214 -> 18,757 (train 20,549->18,184, val 665->573; dhash 2,163, same-text 143, gold file 151).
+  - ring_baseline/kept: 11,255 -> 9,165. hard_vl1: 1,693 -> 1,401. supplement_20261029: 352 -> 308 (not used in training).
+  - dHash<5 is aggressive (many generic red round seals collide); it over-removes rather than under-removes.
+  - `synth_names/blocked_nogold_20261030.txt` (885) = load_blocked + gold texts, passed via `--blocked`.
+- Run A `checkpoints/parseq_reader_large_nogold/`: production S@512 cmd with nogold kept/hard/blocked (`logs/parseq_large_nogold.cmd/.log/.start/.end`). Still init from vl1 (vl1 saw gold-contaminated data; caveat).
+- Gold-style synth `synth_corpus/gold_style_20261030/` (12,000 PNG, labels.jsonl abs paths, stats.json, SOURCE.txt), generator `gold_rescreen/gen_gold_style.py`, log `logs/gen_gold_style_20261030.log`. Styles: long names 2,655, low contrast 4,775, center/bottom lines 7,283, shapes round 4,169 / oval 2,835 / square 1,736 / double-ring 3,260, ~18% neighbour seal overlap, document body text, ruled lines, signature strokes, small resize 200-448 + JPEG. Texts from places_all + name_corpus composers + names_for_vl1; rejects gold v2 strings (equal or substring >=5 chars) and the blocked list (1,344 rejected). Faint-ring samples are re-rendered. No gold image used.
+- Run B `checkpoints/parseq_reader_large_nogold_gs/`: same cmd with `ring_v2/kept_nogold_goldstyle_20261030.jsonl` (kept_nogold + 12k synth as train rows, 30,184 train). Note 12 epochs over a larger set = ~1.7x steps of A.
+- Eval: `gold_rescreen/eval_gold_v2_cli.py <model,model,...> <tag>` -> `gold_v2/eval_<tag>.json`, `preds_<tag>.jsonl`. Trainer exports `finetune/parseq_reader.onnx` itself.
+
+## 2026-10-30 nogold 对比评测结果（自动检查写入）
+文件：gold_v2/eval_nogold_20261030.json、eval_nogold_gs_20261030.json；日志 logs/eval_nogold_auto_20261030.log。均为 S@512。
+| 模型 | 227单章 exact greedy/lex | 1-NED lex | 59 未见子集 exact greedy/lex | 已见105 exact lex | 长名45 lex | 低对比44 lex | 多章8 hit / best1NED |
+|---|---|---|---|---|---|---|---|
+| 生产 parseq_reader_large (step 325024) | 84 / 91 | 0.839 | 18 / 16 | 45 | 8 | 29 | 0 / 0.345 |
+| nogold (step 375008) | 75 / 80 | 0.812 | 19 / 19 | 34 | 3 | 24 | 0 / 0.287 |
+| nogold+gold风格合成 (step 375008) | 73 / 79 | 0.797 | 20 / 21 | 32 | 3 | 22 | 0 / 0.251 |
+结论：生产模型的领先主要来自 gold 近重复泄漏（已见子集 45 vs 34）；在真正未见的 59 张上 nogold 系列持平略好。gold 风格合成没有带来整体提升，长名/低对比反而下降。多章 8 张三者都 0 命中。未切换生产（需用户批准）。
+
+## Gold-style synth v2 (2026-10-30, done)
+- Diagnosis of v1 (gold_rescreen/diag_gs.py): v1 synth was too pale/gray, loosely cropped (~320px vs real gold long-name ~145px), long names too short (median 18 vs 23), and low-contrast was pale red, whereas gold low-contrast is desaturated gray copies (ink frac ~0.004, bg ~189). Error pattern: on long names the models drop 1-2 chars.
+- v2 generator: gold_rescreen/gen_gold_style_v2.py -> synth_corpus/gold_style_v2_20261030 (6000 imgs: 1198 long>=18, 1509 gray low-contrast, neighbour overlap 15%, white doc paper, tight crop, lognormal size ~150/220px; gold strings excluded, 361 blocked).
+- Train: checkpoints/parseq_reader_large_nogold_gs2 (init nogold best, 4 ep, lr 5e-5/1e-5, kept=ring_v2/kept_nogold_goldstyle_v2_20261030.jsonl = 18184 real + 6000 synth ~25%). cmd logs/parseq_large_nogold_gs2.cmd; 13:01-13:23 UTC.
+- Eval gold_v2/eval_nogold_gs2_20261030.json (exact/227; greedy|lex):
+  - prod 84|91, nogold 75|80, nogold_gs 73|79, nogold_gs2 74|77
+  - unseen59: prod 18|16, nogold 19|19, gs 20|21, gs2 18|16
+  - long45: prod 4|8, nogold 2|3, gs 3|3, gs2 2|2
+  - low44: prod 28|29, nogold 23|24, gs 19|22, gs2 22|24
+  - multi8 mean best 1-NED (greedy): prod .345, nogold .287, gs .251, gs2 .283 (lex .312)
+- Conclusion: v2 removes the v1 low-contrast regression (back to nogold level) but does not help long names or unseen; synth-style alone is not the lever. Production unchanged. Next ideas: long-name fix likely needs decoder max-len/aspect (ring unwrap resolution) rather than more synth; multi-seal needs detector-side separation.
