@@ -540,3 +540,11 @@ Outputs: `gold_v2/eval_multi_3m_u_p2_20261031.json` (identical to `..._p2_s0.25_
 - Stats: 5454 seals (458 images, ~12 stamp instances of the same seal per image), 119 dropped for gold-name overlap -> **5335 eval crops, only 61 unique names, 0 seen in train labels**, all len<14. Difficulty easy 2087 / normal 2302 / difficult 1065. Colours black/blue/red (CSD is photographed, many non-red seals -> large domain gap).
 - Status: re-run (fixed ring selection) started 2026-10-31 05:23 CST with nohup; results -> `external/csd/eval_csd_test_20261031.json`. See the follow-up section below if it has been filled in.
 
+
+### Follow-up 2026-10-31 09:50 CST (results filled in)
+- CSD test (5335 crops, 61 names, all unseen): large greedy 819 / 0.76378, lex 902 / 0.76987; nogold greedy 921 / 0.78001, lex 985 / 0.78455; nogold_len32 greedy 825 / 0.76741, lex 909 / 0.77590; vitb_finetune greedy 954 / 0.77637, lex 1034 / 0.78196. nogold beats production on CSD. Production unchanged.
+- TrOCR v2 (`eval_trocr_v2_20261031.json`): all_single 11/227 1-NED 0.32736 (beam1), 0.31252 (beam4); orig63 0/63; unseen59 4/59 0.40692. 217.3M params, bs1 greedy 186.4 ms, peak 7107 MB. Still far below PARSeq; do not invest further without a pretrained Chinese seal decoder pretrain.
+- det_multi (pad 2, score 0.25, NMS 0.45), 8 multi images / 16 seals: large greedy 3/16 0.6582, lex 4/16 0.6626; nogold 4/16 0.6434 (lex 0.6439); len32 4/16 0.6184 (lex 0.6281). Single images: 220 one box, 3 zero, 4 two.
+- len32 on gold v2 unseen59: greedy 18 / 0.80229, lex 20 / 0.81056 (nogold greedy 19 / 0.80319); orig63 and long_name worse than nogold. Not adopted.
+- ReST: `external/rest/` is empty. No ReST archive on /home/rapidstamp_data, /home/znsoft, /tmp, znsoftpc user profile, or the bot box. `/home/mayong` (/dev/sdc, ext3) is mounted `emergency_ro` and returns Input/output error; the earlier ReST/Paddle archives were probably there (`/home/mayong/datasets/...`). Needs disk check (fsck) by the user before ReST can be used.
+EOF
