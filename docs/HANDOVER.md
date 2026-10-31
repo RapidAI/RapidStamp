@@ -590,3 +590,29 @@ Findings and recommendation:
 - A regresses on long names: long_name lex 2/45 vs production 8/45, and multi-image mean 1-NED 0.307 vs 0.345.
 - B (long v3 synth, hard-prob 0.25) does not help long names (3/45) and is below A on nearly everything. Do not adopt the long v3 recipe as is.
 - unseen59 has only 59 images; +4 to +6 is a signal, not a settled result. Recommend A as the next production candidate, but do not promote it until the long-name regression is checked (for example, route len>=14 to production or Aliyun, or add real long names) and the user approves. Production unchanged.
+## 2026-11-01 Long-name labeling batch + length routing
+
+### Long-name labeling batch (training data, NOT gold)
+- Folder: `/home/rapidstamp_data/long_label_20261101/` (`images/ll_001..200`, `long_label.csv` UTF-8-BOM, `long_label.jsonl`, `summary.json`).
+- Source: `gold_rescreen/pool_scored.jsonl` real crops (kept + supplement), ring label or production pred >= 14 chars.
+- Filters: short>=80, lapvar@128>=400, contrast std>=18, aspect 0.75-1.33; excluded gold_v2 texts, dHash<12 vs any gold_v2 image, all gold_candidates v2 and label_clean review_20261030 items; one per name, max 3 per 4-char prefix, self dHash>=6; round-robin by source.
+- 3815 candidates -> 200 selected; 186 have current label >=14 chars. prefilled_text = routed prediction (prod S@512 lex if max(len)>=16, else A clean_csd lex; 65 routed to prod). Only 79/200 prefills equal the current pool label.
+- User fills `user_text` (same conventions as gold: (????) unreadable, (???) not a seal, `/` separates two seals). Original pool labels untouched; merge into a new labels file when returned.
+- Script: `gold_rescreen/routing_20261101/build_long_label.py`.
+
+### Length routing (offline, from preds_cand_20261031 / preds_csd_cand_20261031)
+- Script/result: `gold_rescreen/routing_20261101/route_eval.py`, `route_eval_20261101.json`. Exact (1-NED):
+
+| strategy | unseen59 | single227 | orig63 | long45 | CSD5335 |
+|---|---|---|---|---|---|
+| prod lex | 16 (.813) | 91 (.839) | 30 (.918) | 8 (.778) | 902 (.770) |
+| A lex | 22 (.823) | 92 (.828) | 33 (.938) | 2 (.707) | 1641 (.837) |
+| A-len>=12 -> prod | 16 | 90 | 30 | 8 | 1595 |
+| A-len>=14 -> prod | 18 | 95 | 33 | 8 | 1641 |
+| A-len>=16 -> prod | 22 (.825) | 98 (.840) | 33 (.935) | 8 (.780) | 1641 (.837) |
+| prod-len>=14 | 19 | 94 | 33 | 6 | 1641 |
+| prod-len>=16 | 22 | 96 | 33 | 6 | 1641 |
+| max(len)>=14 | 19 | 96 | 33 | 8 | 1641 |
+| max(len)>=16 -> prod | 22 (.825) | 98 (.841) | 33 (.935) | 8 (.780) | 1641 (.837) |
+
+- Best: route to production when max(len(A), len(prod)) >= 16 (or A-len>=16): matches or beats both single models on every set. Requires running both readers (~2x reader cost) for the either-rule; A-len rule needs prod only for long ones. Production NOT swapped; awaiting user decision. CSD caveat: A saw CSD train styles.
