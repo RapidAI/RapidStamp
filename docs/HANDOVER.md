@@ -547,4 +547,3 @@ Outputs: `gold_v2/eval_multi_3m_u_p2_20261031.json` (identical to `..._p2_s0.25_
 - det_multi (pad 2, score 0.25, NMS 0.45), 8 multi images / 16 seals: large greedy 3/16 0.6582, lex 4/16 0.6626; nogold 4/16 0.6434 (lex 0.6439); len32 4/16 0.6184 (lex 0.6281). Single images: 220 one box, 3 zero, 4 two.
 - len32 on gold v2 unseen59: greedy 18 / 0.80229, lex 20 / 0.81056 (nogold greedy 19 / 0.80319); orig63 and long_name worse than nogold. Not adopted.
 - ReST: `external/rest/` is empty. No ReST archive on /home/rapidstamp_data, /home/znsoft, /tmp, znsoftpc user profile, or the bot box. `/home/mayong` (/dev/sdc, ext3) is mounted `emergency_ro` and returns Input/output error; the earlier ReST/Paddle archives were probably there (`/home/mayong/datasets/...`). Needs disk check (fsck) by the user before ReST can be used.
-EOF
