@@ -560,3 +560,33 @@ Driver `gold_rescreen/bx_run_cand_20261031.sh` (nohup; log `logs/cand_20261031.n
 - User review merge path: when `label_clean/review_20261030/review.csv` is filled, apply corrections onto a NEW copy of `kept_nogold_vote_fix_20261030.jsonl` (key = file) and rerun Run A cmd with the new --kept.
 - **Mask-out multi** (`gold_rescreen/bx_det_multi_mask.py`, blanks other boxes' ellipses x1.05 outside own ellipse with median paper color; PAD 2, MINFRAC 0.3, score 0.25, NMS 0.45) on existing models: large 3/16 greedy (1-NED 0.6582), 4/16 lex (0.6626); nogold 4/16 (0.630 / 0.635); vitb_ft 4/16 (0.6417 / 0.6666). **No gain vs no-mask** - remaining errors are 1-2 chars per seal, not cross-seal bleed; gc2_148 and gc2_169 still one merged box. `gold_v2/eval_multi_mask_base_20261031.json`.
 - **Detector fine-tune: blocked.** Only `seal_det.onnx` (bundled) exists; no detector training code or PyTorch/Paddle weights on the server, no ultralytics. Need the original detector training source/weights before overlapping-seal synth can be used.
+
+## 2026-10-31 candidate results (cand_20261031, finished)
+Run `cand_20261031` started 2026-10-31 16:04 CST and ended 19:24 CST (`logs/cand_20261031.start` / `.end`). **Production model NOT swapped** (still `parseq_reader_large` step 325,024). Sources: `gold_v2/eval_cand_20261031.json`, `external/csd/eval_csd_cand_20261031.json`, `gold_v2/eval_multi_mask_{base,cand}_20261031.json`, `label_clean/vote_fallback_*_vitb_20261031.json`.
+A = `parseq_reader_large_clean_csd` (step 150,016), B = `parseq_reader_large_clean_csd_long` (step 175,008). Cells are exact / 1-NED, greedy | lex.
+
+| Model | **gold v2 unseen59** (primary) | gold v2 single 227 | gold multi 8 imgs (mean best 1-NED) | CSD test 5335 | mask-out multi 16 seals |
+|---|---|---|---|---|---|
+| production `parseq_reader_large` | 18 / 0.81083 \| 16 / 0.81263 | 84 / 0.83372 \| 91 / 0.83883 | 0.34541 \| 0.34541 | 819 / 0.76378 \| 902 / 0.76987 | 3 / 0.6582 \| 4 / 0.6626 |
+| `parseq_reader_large_nogold` | 19 / 0.80319 \| 19 / 0.80688 | 75 / 0.80551 \| 80 / 0.81174 | 0.28575 \| 0.28673 | 921 / 0.78001 \| 985 / 0.78455 | 4 / 0.630 \| 4 / 0.635 |
+| ViT-B `parseq_reader_vitb_finetune` | 18 / 0.78289 \| 20 / 0.78694 | 76 / 0.80535 \| 84 / 0.81194 | 0.27079 \| 0.31606 | 954 / 0.77637 \| 1034 / 0.78196 | 4 / 0.6417 \| 4 / 0.6666 |
+| **A** clean_csd | **21 / 0.81979 \| 22 / 0.82290** | 79 / 0.81856 \| 92 / 0.82819 | 0.29134 \| 0.30698 | **1566 / 0.83314 \| 1641 / 0.83654** | **5 / 0.6638 \| 5 / 0.6638** |
+| B clean_csd_long | 18 / 0.80294 \| 22 / 0.81333 | 71 / 0.80818 \| 82 / 0.81567 | 0.26357 \| 0.26357 | 1548 / 0.83302 \| 1573 / 0.83577 | 4 / 0.6682 \| 4 / 0.6682 |
+
+Multi (8 images) hit_any is 0 for every model. Other gold groups (lex): orig63 prod 30, nogold 27, vitb 29, A 33, B 26; long_name (45) prod 8, nogold 3, vitb 4, A 2, B 3; odd_shape (30) prod 11, A 10, B 10; low_contrast (44) prod 29, A 28, B 24. Production saw 105 of the new164 gold images in training (new164_seen_in_train), so its 227 number is inflated; unseen59 is the fair comparison.
+
+Vote fallback (`bx_vote.py`, model X lex vs vitb_finetune lex, accept only identical strings, else route to Aliyun; simulated, no API calls):
+
+| X | unseen59 agree / routed / agree-exact / precision | single227 agree / routed / precision | CSD 5335 agree / routed / precision | X alone exact (227 / CSD) |
+|---|---|---|---|---|
+| nogold | 20 / 39 / 13 / 0.6500 | 79 / 148 / 0.7975 | 786 / 4549 / 0.7430 | 80 / 985 |
+| A | 19 / 40 / 12 / 0.6316 | 81 / 146 / 0.8519 | 690 / 4645 / 0.8710 | 92 / 1641 |
+| B | 17 / 42 / 13 / 0.7647 | 74 / 153 / 0.8378 | 664 / 4671 / 0.8735 | 82 / 1573 |
+
+(`vote_fallback_cand_20261031.json` is the same content as the B file.) The rule routes ~64-70% of gold and ~87% of CSD to fallback, and accepted labels are still only 63-87% correct, so it is not a usable auto-labeling filter as is.
+
+Findings and recommendation:
+- A is the best candidate: unseen59 22/59 lex (+6 vs production lex 16, +4 vs production's best 18 greedy; 1-NED 0.82290 vs 0.81263), best greedy 21/59, CSD +739 exact lex (1641 vs 902; note A/B saw 3065 CSD-train crops from 22 names that are name-disjoint from CSD test, so part of this is domain adaptation), best mask-out 5/16, orig63 33 vs 30.
+- A regresses on long names: long_name lex 2/45 vs production 8/45, and multi-image mean 1-NED 0.307 vs 0.345.
+- B (long v3 synth, hard-prob 0.25) does not help long names (3/45) and is below A on nearly everything. Do not adopt the long v3 recipe as is.
+- unseen59 has only 59 images; +4 to +6 is a signal, not a settled result. Recommend A as the next production candidate, but do not promote it until the long-name regression is checked (for example, route len>=14 to production or Aliyun, or add real long names) and the user approves. Production unchanged.
