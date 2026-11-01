@@ -626,3 +626,23 @@ Findings and recommendation:
 - long_label_20261101 (200 long samples) cancelled by user; folder left in place, unused.
 - Human-verified long names (from the 243; gold v2 stays excluded): >=14 chars 189, >=16 138; train split 137 (>=16: 109), 100 verified rows are val split.
 - A2 training (started 2026-11-01 ~09:00 CST): init nogold, same recipe as A, kept=kept_a2_20261101 (reviewed fix + CSD 3065), hard=hard_a2_20261101 (hard + CSD + human-verified long x6 + other real long>=15 x2), hard-prob 0.20 -> checkpoints/parseq_reader_large_a2_reviewed_long. Pipeline gold_rescreen/bx_run_a2_20261101.sh, logs/a2_20261101.nohup; then gold v2 + CSD eval and routing (A2, len>=16 -> production) -> gold_rescreen/routing_20261101/route_eval_a2_20261101.json. Production unchanged.
+
+### A2 results (finished 2026-11-01 ~10:18 CST; checked by bot 11:55 CST)
+- Run: start 08:36 CST, end 10:18 CST (`logs/a2_20261101.{start,end,nohup}`). Checkpoint/ONNX: `checkpoints/parseq_reader_large_a2_reviewed_long/finetune/` (`parseq_reader.onnx`, 127.7 MB). Loader: kept 16121, hard_base 944, csd 3065, hv_long14_train 137, hv_long16_train 109, hv_val 100, other_real_long15 1086.
+- Eval: `gold_v2/preds_a2_20261101.jsonl`, `external/csd/eval_csd_a2_20261101.json`, routing `gold_rescreen/routing_20261101/route_eval_a2_20261101.{py,json}` (here "A" = A2, P = production S@512 lex; `X@16` = use production when len >= 16, else A2).
+- Greedy vs lex, gold single227: prod 84/91, A clean_csd 79/92, A2 78/85. CSD5335: prod 819/902, A 1566/1641, A2 1533/1580.
+- Exact (1-NED), lex decoding:
+
+| strategy | unseen59 | single227 | orig63 | long45 | CSD5335 |
+|---|---|---|---|---|---|
+| prod | 16 (.813) | 91 (.839) | 30 (.918) | 8 (.778) | 902 (.770) |
+| A clean_csd | 22 (.823) | 92 (.828) | 33 (.938) | 2 (.707) | 1641 (.837) |
+| A, max(len)>=16 -> prod | 22 (.825) | 98 (.841) | 33 (.935) | 8 (.780) | 1641 (.837) |
+| A2 | 20 (.808) | 85 (.816) | 27 (.922) | 4 (.693) | 1580 (.830) |
+| A2, A2-len>=16 -> prod | 20 (.806) | 88 (.829) | 26 (.920) | 8 (.775) | 1580 (.830) |
+| A2, max(len)>=14 -> prod | 18 (.807) | 91 (.831) | 29 (.922) | 8 (.775) | 1580 (.830) |
+| A2, max(len)>=16 -> prod | 20 (.806) | 88 (.829) | 26 (.920) | 8 (.775) | 1580 (.830) |
+
+- Images where A2-len>=16 changed the output to the production prediction: single227 56, orig63 8, long45 39, unseen59 5, CSD 0. Routing is local (production reader), so there are no Aliyun calls; the cost is a second reader pass on long predictions. Aliyun fallback was not evaluated in this run.
+- Conclusion: A2 is worse than A on every set (single227 -7, orig63 -6, unseen59 -2, CSD -61) and only fixes long names partly (4/45 vs A 2/45, prod 8/45). Even with routing, A2 is worse than A+route (88 vs 98 on single227). The human-verified long names (137 train rows x6 + other real long x2, hard-prob 0.20) did not fix the long-name regression and hurt the rest.
+- Recommendation: do NOT adopt A2. The best candidate is still A clean_csd + route max(len(A),len(prod))>=16 -> production (or A-len>=16). Production NOT swapped; waiting for the user. Caveats: unseen59 and long45 are small (one image = 1.7 / 2.2 pt); A and A2 saw CSD train styles. Possible next steps: A + len routing as is, or an A2 variant with lower long oversampling / hard-prob.
