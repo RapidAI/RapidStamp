@@ -616,3 +616,13 @@ Findings and recommendation:
 | max(len)>=16 -> prod | 22 (.825) | 98 (.841) | 33 (.935) | 8 (.780) | 1641 (.837) |
 
 - Best: route to production when max(len(A), len(prod)) >= 16 (or A-len>=16): matches or beats both single models on every set. Requires running both readers (~2x reader cost) for the either-rule; A-len rule needs prod only for long ones. Production NOT swapped; awaiting user decision. CSD caveat: A saw CSD train styles.
+
+## 2026-11-01 Review-250 merge + A2 retrain (bot)
+- User verified the 250-row cross-vote queue: /home/rapidstamp_data/review_20261030_verified (GB18030 CSV; user edited `current_label` in place). Backup: backup/review_20261030_verified_20261101.
+- Parsed: 243 valid, 5 unreadable (dropped), 1 non-seal (dropped; detector negative list), 1 two-seal (excluded, listed). 171/243 changed vs old label (131 if only ring text before `#`; many edits add the `#` sub-line).
+- Candidate agreement with user (exact / ring-only), all 243: old label 72/112, vote winner 24/27, prod S@512 25/30, A clean_csd 23/27, ViT-B 23/28, nogold 22/24. conflict tier (222): old label 69/107, all models 8-11. likely_fix (21): models 14/21, old label 3/21.
+  => conflict tier = models are wrong, old label mostly right on ring text but missing sub-lines; likely_fix = vote correct ~2/3. Do not auto-apply conflict proposals.
+- New files (originals untouched): ring_v2/kept_nogold_vote_{fix,strict}_reviewed_20261101.jsonl, labels/supplement_nogold_vote_{fix,strict}_reviewed_20261101.jsonl (conflict rows restored from kept_nogold_20261030 with user text, `human_verified` + `prev_text`). Lists: label_clean/reviewed_20261101/{unreadable,non_seal_detector_negatives,two_seals,all_rows}.jsonl, summary.json. Script gold_rescreen/bx_merge_review_20261101.py.
+- long_label_20261101 (200 long samples) cancelled by user; folder left in place, unused.
+- Human-verified long names (from the 243; gold v2 stays excluded): >=14 chars 189, >=16 138; train split 137 (>=16: 109), 100 verified rows are val split.
+- A2 training (started 2026-11-01 ~09:00 CST): init nogold, same recipe as A, kept=kept_a2_20261101 (reviewed fix + CSD 3065), hard=hard_a2_20261101 (hard + CSD + human-verified long x6 + other real long>=15 x2), hard-prob 0.20 -> checkpoints/parseq_reader_large_a2_reviewed_long. Pipeline gold_rescreen/bx_run_a2_20261101.sh, logs/a2_20261101.nohup; then gold v2 + CSD eval and routing (A2, len>=16 -> production) -> gold_rescreen/routing_20261101/route_eval_a2_20261101.json. Production unchanged.
