@@ -646,6 +646,22 @@ Findings and recommendation:
 - Images where A2-len>=16 changed the output to the production prediction: single227 56, orig63 8, long45 39, unseen59 5, CSD 0. Routing is local (production reader), so there are no Aliyun calls; the cost is a second reader pass on long predictions. Aliyun fallback was not evaluated in this run.
 - Conclusion: A2 is worse than A on every set (single227 -7, orig63 -6, unseen59 -2, CSD -61) and only fixes long names partly (4/45 vs A 2/45, prod 8/45). Even with routing, A2 is worse than A+route (88 vs 98 on single227). The human-verified long names (137 train rows x6 + other real long x2, hard-prob 0.20) did not fix the long-name regression and hurt the rest.
 - Recommendation: do NOT adopt A2. The best candidate is still A clean_csd + route max(len(A),len(prod))>=16 -> production (or A-len>=16). Production NOT swapped; waiting for the user. Caveats: unseen59 and long45 are small (one image = 1.7 / 2.2 pt); A and A2 saw CSD train styles. Possible next steps: A + len routing as is, or an A2 variant with lower long oversampling / hard-prob.
+## 2026-11-01 环文字展平(unwarp) + strip PARSeq 实验（未上线）
+
+- 方法：`rapidstamp_train/ring_text.unwrap_ring` 拟合外圈 → 环带 → 起始角（缺口/编码/中线/五角星，兜底 140°）→ 极坐标展平为 48 高条带。脚本：`/home/rapidstamp_data/gold_rescreen/unwarp_20261101/uw_{build,grid,train,eval}.py`、`uw_run.sh`。
+- 条带：`/home/rapidstamp_data/ring_unwarp_20261101/strips/<set>`（+`<set>.jsonl`）。失败率（兜底角或墨量<0.02）：real 847/13041 (6.5%)，csdtrain 702/3065，synthlong 2919/10885，gold 31/235 (13.7%)，long45 6/45，csdtest 692/5335 (13.0%)。失败主要为椭圆/方章。
+- QA 网格：`/home/rapidstamp_data/ring_unwarp_20261101/unwarp_grid_gold.png`（30 例）。问题：起始角切在字中间导致绕回；环带半径切掉字头；椭圆/方章失败。
+- 训练：64×1024，max_len 34，以 A(`parseq_reader_large_clean_csd/finetune/best.pt`) 初始化（pos_embed 重采样），5516 步 / 约 18 分钟。权重 `checkpoints/parseq_strip_20261101/best.pt`，val exact 91/410 (1-NED 0.53)。
+- 评测（exact/1-NED，unseen59 | single227 | orig63 | long45 | CSD5335，lex）：
+  - prod 16 | 91 | 30 | 8 | 902
+  - A 22 | 92 | 33 | 2 | 1641
+  - A+≥16 路由 prod 22 | 98 | 33 | 8 | 1641  ← 仍是最佳
+  - strip 单独 7 | 19 | 8 | 1 | 171
+  - A+strip@max16 19 | 89 | 33 | 2 | 1641；A+strip_if_longer@16 20 | 91 | 32 | 5 | 1641
+  - 结果文件：`unwarp_20261101/eval_strip_20261101.json`、`preds_strip_{gold,csd}_20261101.jsonl`
+- 结论：当前展平质量（起始角/半径错误）+ 训练量不足，strip 模型远弱于整图模型，不建议接入；生产模型未改动。后续可试：多起始角推理取最高置信、修正半径、更长训练。
+- ONNX/C++：展平为纯几何（百分位 + 最小二乘拟合 + 极坐标采样），可直接映射到 `cv::remap` / 现有 `polar_unwrap` 与 C++ `unwrap_golden` 测试，移植无障碍；识别器仍是标准 PARSeq ONNX。
+
 ### PaddleOCR-VL-1.6 zero-shot + full fine-tune (bot, 2026-11-01 ~20:30 CST)
 - Weights: `pretrained/paddlex/official_models/PaddleOCR-VL-1.6` (same 0.9B model used for VL labeling; 905.6M params). HF transformers 5.19 in main conda env, bf16. Scripts/results: `vl16_20261101/` (`vlcommon.py`, `zs.py`, `ft.py`, `eval_zs.json`, `preds_zs.jsonl`).
 - Zero-shot, prompt `Seal Recognition:`, native size, full multi-line output; ring = first line, full = lines joined by `#`. No lexicon post-correction (VL has no beam scores to rescore; not applied).
