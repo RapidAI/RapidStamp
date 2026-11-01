@@ -57,6 +57,30 @@ int rapidstamp_infer(rapidstamp_engine* engine,
                      rapidstamp_seal* out_seals,
                      int max_out);
 
+/* PARSeq ring reader (whole crop, lexicon rescoring, length routing).
+   release_dir holds route.json, reader_*.onnx, charset.txt and the name list;
+   see python/src/rapidstamp/ring_reader.py. names_path NULL and
+   long_threshold < 0 keep the route.json values. If <model dir>/ring_reader/
+   route.json exists beside charset_path, rapidstamp_create loads it too and
+   rapidstamp_infer fills seal.text from it for the classes it lists
+   (default: every class except square_personal). */
+typedef struct rapidstamp_ring_reader rapidstamp_ring_reader;
+rapidstamp_ring_reader* rapidstamp_ring_reader_create(const char* release_dir,
+                                                      int intra_threads,
+                                                      const char* names_path,
+                                                      int long_threshold);
+void rapidstamp_ring_reader_destroy(rapidstamp_ring_reader* reader);
+/* Crop is rgb8. Writes UTF-8 text. routed is 1 when the long model answered. */
+int rapidstamp_ring_read(rapidstamp_ring_reader* reader,
+                         const uint8_t* rgb,
+                         int width,
+                         int height,
+                         int stride,
+                         char* text,
+                         int text_cap,
+                         float* score,
+                         int* routed);
+
 const char* rapidstamp_class_name(rapidstamp_engine* engine, int class_id);
 const char* rapidstamp_last_error(void);
 

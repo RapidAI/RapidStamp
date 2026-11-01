@@ -89,6 +89,7 @@ class RapidStamp:
         nms_thresh: float | None = None,
         angle_steps: int | None = None,
         fast: bool = False,
+        ring_dir: str | Path | None = None,
     ) -> None:
         import onnxruntime as ort
 
@@ -140,6 +141,14 @@ class RapidStamp:
             ppocr_session = ort.InferenceSession(str(ppocr_model), sess_options=opts, providers=chosen)
             self._ppocr = _Reader(ppocr_session, ppocr_charset, "ppocr")
         self.route = load_rec_route(str(directory / "rec_route.txt"))
+        # Optional PARSeq ring reader release (route.json). Not bundled; see ring_reader.py.
+        self.ring = None
+        ring_path = Path(ring_dir) if ring_dir else directory / "ring_reader"
+        if (ring_path / "route.json").is_file():
+            from .ring_reader import RingReader
+
+            self.ring = RingReader(ring_path, providers=chosen)
+        self.ring_classes = set(self.ring.cfg.get("classes") or []) if self.ring else set()
 
     def __call__(self, image: str | Path | np.ndarray | Image.Image) -> list[Seal]:
         rgb = _to_rgb(image)
@@ -182,7 +191,10 @@ class RapidStamp:
             name = self.class_names[class_id] if class_id < len(self.class_names) else str(class_id)
             layout = self.layouts.get(name, "circle")
             crop = rgb[y1:y2, x1:x2]
-            text, text_score = self._read(crop, layout, name)
+            if self.ring is not None and (name in self.ring_classes if self.ring_classes else name != "square_personal"):
+                text, text_score = self.ring(crop).text, 1.0
+            else:
+                text, text_score = self._read(crop, layout, name)
             center = ""
             if name == "invoice":
                 center, _center_score = self._read_center(crop, name)

@@ -1,6 +1,7 @@
 #include "rapidstamp.h"
 
 #include "geometry.h"
+#include "ring_reader.h"
 #include "route.h"
 
 #include <onnxruntime_cxx_api.h>
@@ -132,6 +133,14 @@ struct rapidstamp_engine {
     RuntimeConfig config;
     int threads = 4;
     std::mutex mutex;
+    std::unique_ptr<rs::RingReader> ring;
+
+    bool ring_class(const std::string& name) const {
+        if (!ring) return false;
+        const auto& list = ring->config().classes;
+        if (list.empty()) return name != "square_personal";
+        return std::find(list.begin(), list.end(), name) != list.end();
+    }
 
     RecHead& reader_for(const std::string& class_name);
     std::pair<std::string, float> recognize(const RsImage& strip, RecHead& head);
@@ -450,6 +459,9 @@ rapidstamp_engine* rapidstamp_create(const char* det_model_path, const char* rec
         engine->det = open_session(engine->env, det_model_path, options);
         engine->ctc.session = open_session(engine->env, rec_model_path, options);
         bind_reader(engine->ctc);
+        if (file_readable(dir + "/ring_reader/route.json")) {
+            engine->ring = std::make_unique<rs::RingReader>(engine->env, dir + "/ring_reader", engine->threads);
+        }
         std::string ppocr_path = dir + "/seal_rec_ppocr.onnx";
         std::string ppocr_charset_path = dir + "/charset_ppocr.txt";
         if (file_readable(ppocr_path) && file_readable(ppocr_charset_path)) {
@@ -538,7 +550,13 @@ int rapidstamp_infer(rapidstamp_engine* engine, const uint8_t* rgb, int width, i
             std::string name = det.class_id >= 0 && det.class_id < static_cast<int>(engine->classes.size())
                                    ? engine->classes[det.class_id]
                                    : "";
-            auto decoded = engine->read_layout(crop, layout_of(engine->config, name), name);
+            std::pair<std::string, float> decoded;
+            if (engine->ring_class(name)) {
+                auto ring = engine->ring->read(crop);
+                decoded = {ring.text, ring.score};
+            } else {
+                decoded = engine->read_layout(crop, layout_of(engine->config, name), name);
+            }
             rapidstamp_seal& slot = out_seals[written++];
             std::memset(&slot, 0, sizeof(slot));
             slot.x1 = x1;
@@ -586,3 +604,54 @@ const char* rapidstamp_class_name(rapidstamp_engine* engine, int class_id) {
 }
 
 const char* rapidstamp_last_error(void) { return g_error.c_str(); }
+
+struct rapidstamp_ring_reader {
+    Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "rapidstamp_ring"};
+    std::unique_ptr<rs::RingReader> reader;
+    std::mutex mutex;
+};
+
+rapidstamp_ring_reader* rapidstamp_ring_reader_create(const char* release_dir, int intra_threads, const char* names_path,
+                                                      int long_threshold) {
+    if (!release_dir) {
+        set_error("release_dir is null");
+        return nullptr;
+    }
+    try {
+        auto out = std::make_unique<rapidstamp_ring_reader>();
+        out->reader = std::make_unique<rs::RingReader>(out->env, release_dir, intra_threads,
+                                                       names_path ? names_path : "", long_threshold);
+        return out.release();
+    } catch (const std::exception& ex) {
+        set_error(ex.what());
+        return nullptr;
+    }
+}
+
+void rapidstamp_ring_reader_destroy(rapidstamp_ring_reader* reader) { delete reader; }
+
+int rapidstamp_ring_read(rapidstamp_ring_reader* reader, const uint8_t* rgb, int width, int height, int stride,
+                         char* text, int text_cap, float* score, int* routed) {
+    if (!reader || !rgb || width < 1 || height < 1 || stride < width * 3 || !text || text_cap <= 0) {
+        set_error("bad ring_read arguments");
+        return RAPIDSTAMP_ERR_ARG;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(reader->mutex);
+        RsImage crop;
+        crop.width = width;
+        crop.height = height;
+        crop.channels = 3;
+        crop.data.resize(static_cast<size_t>(width) * height * 3);
+        for (int y = 0; y < height; ++y)
+            std::memcpy(crop.pixel(0, y), rgb + static_cast<size_t>(y) * stride, static_cast<size_t>(width) * 3);
+        auto out = reader->reader->read(crop);
+        copy_text(text, text_cap, out.text);
+        if (score) *score = out.score;
+        if (routed) *routed = out.routed ? 1 : 0;
+        return RAPIDSTAMP_OK;
+    } catch (const std::exception& ex) {
+        set_error(ex.what());
+        return RAPIDSTAMP_ERR_RUNTIME;
+    }
+}

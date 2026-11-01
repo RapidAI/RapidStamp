@@ -14,8 +14,8 @@ endif()
 
 # MSVC does not export symbols by default, so the DLL otherwise has no import library.
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-add_library(rapidstamp SHARED src/engine.cpp src/geometry.cpp)
-add_library(rapidstamp_static STATIC src/engine.cpp src/geometry.cpp)
+add_library(rapidstamp SHARED src/engine.cpp src/geometry.cpp src/ring_reader.cpp)
+add_library(rapidstamp_static STATIC src/engine.cpp src/geometry.cpp src/ring_reader.cpp)
 # Keep the static archive name distinct. On Windows both targets otherwise
 # write rapidstamp.lib, and the API test links the archive without ONNX Runtime.
 
@@ -58,6 +58,12 @@ if(RAPIDSTAMP_BUILD_TESTS)
 endif()
 
 if(RAPIDSTAMP_BUILD_EXAMPLES)
+    add_executable(rapidstamp_ring_eval examples/ring_eval.cpp)
+    target_link_libraries(rapidstamp_ring_eval PRIVATE rapidstamp)
+    target_include_directories(rapidstamp_ring_eval PRIVATE include)
+    if(NOT WIN32)
+        set_target_properties(rapidstamp_ring_eval PROPERTIES BUILD_RPATH "${ORT_ROOT}/lib")
+    endif()
     add_executable(rapidstamp_demo examples/demo.cpp)
     target_link_libraries(rapidstamp_demo PRIVATE rapidstamp)
     target_include_directories(rapidstamp_demo PRIVATE include)
