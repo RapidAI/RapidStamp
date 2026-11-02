@@ -781,3 +781,14 @@ Findings and recommendation:
 - Scripts and logs: label_clean/distill2_20261103/ (pool.py, pl2.py, filt2.py, run2.sh). Outputs: pseudo_pool.jsonl, pseudo_v2_combined.jsonl, pseudo_pool_stats.json.
 - Student: checkpoints/svtrv2_distill2_20261103, init from svtrv2_distill_20261102/best.pt, lr 1.2e-4, 30k steps, gold eval every 3k steps (eval_step*.json).
 - Baseline to beat: distill1 single227 123 / unseen59 34 / orig63 46 / long45 11 / val300 272.
+
+## 2026-11-03 用户重传数据集处理（pool_incoming_20261103）
+- 上传目录：/home/rapidstamp_data/incoming_20261103/（原件保留），解压到 incoming_20261103/extracted/{rest,aistudio_circle}。
+- reset.zip = ICDAR2023 ReST 印章数据集：train 5000 张 + train_gts.json（每个文字实例一个多边形 + transcription，chars.txt），test 5000 张（无标签）。单印章裁剪图，中位约 310x250。
+- test_images.zip 和 train/ 目录与 reset.zip 内容逐字节相同（MD5 一致）。
+- dataset.zip = AI Studio / PaddleOCR 格式合成印章集（circle_Aug*.png，640x640），train 8000 + test 2000，PaddleOCR det 标注（每行 transcription + 14 点多边形：环形单位名、13 位编码、底部文字）。
+- 印章数据集/ 下 rec_seal_0.zip、rec_seal_1.zip、det_seal_0.zip 与 third/*.zip MD5 相同，已用过，跳过；处理中/rec 为空。
+- 去重（external/pool_incoming_20261103/pool_incoming.py，方法同 distill2 pool.py）：MD5 + 256 位 dHash；对训练/已见集（web_seals_cn_all crops、csd crops、third/rec_seal_0/1、det_seal_0、no_seal_0）Hamming ≤16，对 pool_20261103 MD5/≤10，对金标（gold_v2 + gold_candidates*）≤32（严格），集内 ≤10。
+- 结果：候选 20000，保留 17174（rest_train 3754、rest_test 3444、aistudio_train 7985、aistudio_test 1991）。金标近重复去掉 1126（ReST train 573、ReST test 552、AI Studio 1），列表在 gold_dups.json；其中约 200 张距离 ≤16，其余在 17–32，阈值偏严，属有意为之。与训练集重复：ReST 共 487 MD5 + 253 dHash。
+- 真实文字标签：labels_gt.jsonl 13730 条（ReST train 3754 为真实标注；AI Studio 9976 为合成标注，texts[0] 为环形文字）。只含去重后保留的行。
+- 输出：external/pool_incoming_20261103/{pool.jsonl, labels_gt.jsonl, gold_dups.json, stats.json, README.md, run.log}。未启动伪标注或训练，distill2 未受影响，生产未动。
