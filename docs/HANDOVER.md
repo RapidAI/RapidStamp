@@ -772,3 +772,12 @@ Findings and recommendation:
   - CPU i7-8700K：8 线程 155.4 / 164.7 ms，1 线程 404.0 / 429.2 ms
   - 对比 VL-FT teacher GPU 约 535 ms/crop。
 - 未启动 PARSeq 学生或任何其它训练；生产未动。
+
+## Distill2 (2026-11-03): large-scale pseudo-label distillation
+- Pool: /home/rapidstamp_data/external/pool_20261103/pool.jsonl = 64854 images (v2_raw_crops 25012, seal_det on third_det_seal_0 18516 from 3627 full images, seal_det on aliyun_firstscrape 12228 from 998 full images, v2_foreign 4779, v2_raw_rejected 4319, incoming_delta 0 since all were duplicates).
+- Dedupe: MD5 plus 256-bit dHash. Hamming ≤16 vs train, ≤32 vs gold v2 (108 gold near-dups removed), ≤10 within the pool. CSD full images were skipped to avoid test leakage. incoming_v2/part_0*.zip are not valid zips and were skipped.
+- No public dataset was available without an account (ICDAR23 ReST/RRC, TrOCR-Seal Baidu pan, AI Studio need registration).
+- Teacher: VL-FT v1 best, batched with left padding at bs8 (val300 280, same as bs1). Filter: min_lp threshold for val300 precision ≥97%, len 4-40, CJK ≥0.7, template regex, gold-text exclusion, place-name confusion check.
+- Scripts and logs: label_clean/distill2_20261103/ (pool.py, pl2.py, filt2.py, run2.sh). Outputs: pseudo_pool.jsonl, pseudo_v2_combined.jsonl, pseudo_pool_stats.json.
+- Student: checkpoints/svtrv2_distill2_20261103, init from svtrv2_distill_20261102/best.pt, lr 1.2e-4, 30k steps, gold eval every 3k steps (eval_step*.json).
+- Baseline to beat: distill1 single227 123 / unseen59 34 / orig63 46 / long45 11 / val300 272.
