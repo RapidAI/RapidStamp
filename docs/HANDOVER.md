@@ -734,3 +734,20 @@ Findings and recommendation:
   - 输出 checkpoints/paddleocr_vl16_ft_v3_20261102/ (nohup.log), pid 在 vl16_20261101/ft_v3.pid; 启动 11-02 11:18, ~1.05 s/step
 - 蒸馏计划: label_clean/vote3_full_20261102/DISTILL_PLAN.md (未运行)
 - Gold v2 仅评估, 未进训练
+
+## 2026-11-02 VL-1.6 FT v3 结果 + 启动蒸馏（SVTRv2 学生）
+- VL FT v3（checkpoints/paddleocr_vl16_ft_v3_20261102，train_clean_v3，4608 steps，12:52 UTC 结束）：
+  - best（step 3000）：single227 156，unseen59 47，orig63 49，long45 19，val300 267，src_nonvl 87
+  - step 4500：158/48/49/19/267；final 4608：157/48/49/19/267
+- 对比 v1（paddleocr_vl16_ft_20261101，best step 4500）：single227 159，unseen59 48，orig63 51，long45 18，val300 269（各步范围 157–160 / 47–48 / 50–52 / 18–19 / 266–269）
+  - 结论：v3 没有提升（orig63 低 2，single227 低 1–3，long45 +1 在波动内）。清洗后标签对 VL 无明显收益。
+- A+route 参考：single227 98，unseen59 22，orig63 33，long45 8。
+- 蒸馏 teacher 选 v1：checkpoints/paddleocr_vl16_ft_20261101/best（DISTILL_PLAN.md 原写 v3，因 v1 更好改为 v1），prompt Seal Ring:，448px。
+- 目录 label_clean/vote3_full_20261102/distill/：
+  - pl.py（base env python）：teacher 伪标 val300 + vote3 dropped nogold（2,054）→ teacher_pl.jsonl（含 mean_lp/min_lp）
+  - filt_pl.py：按 val 精度 ≥97% 选 min_lp 阈值 = -0.6839（val300 保留 284，其中全量正确 280/300）；过滤长度 2–40、模板、gold 环文、地名丢失 → pseudo_v1.jsonl / pseudo_v1_stats.json
+  - 伪标结果：pool 2,054 → keep 1,385（低置信 613，地名丢失 21，模板 8，gold 文本 27）
+  - mk_student.py 生成 svtrv2_20261102/train_svtrv2_distill.py（--init/--pl；train_clean_v3 x2 + teacher_pl x2 + supp x4 + gs2 + gs2_long + long_v3 + synth_doc；total items 182,223；vocab 6627）
+  - run_distill.sh：PL → filter → 学生（init = checkpoints/svtrv2_20261102/best.pt，lr 1.7e-4，warmup 500，30000 steps，eval_every 3000，nsynth 120000）
+- 学生训练：checkpoints/svtrv2_distill_20261102/（nohup.log），13:44 UTC 启动，~0.43 s/step，预计 17:30–18:00 UTC（北京时间 11-03 01:30–02:00）结束。
+- PARSeq 学生未启动。Gold v2 仅评估，原标签未改动。
