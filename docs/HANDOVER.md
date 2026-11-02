@@ -692,3 +692,19 @@ Findings and recommendation:
 - 金标 227 单章：qwen3-vl-plus 仅 80（放大 896：84，思考模式：91），VL-FT 158。unseen59 28 vs 48，orig63 20 vs 51，long45 9 vs 18。VL=Qwen 81 张中对 72（89%）；VL+阿里云一致 29/29 全对。金标中有 107 张因阿里云额度用完没跑。
 - 结论：Qwen3-VL-plus 认印章远弱于 VL-FT，当第二票时 VL=Qwen 一致也有约 11% 两边同错。实际起作用的是 VL-FT 加阿里云。
 - 费用：百炼约 1.8 元（每张约 230 输入 / 18 输出 token，约 0.0004 元/张）；阿里云 key1 用了 549 次，现已用完；key2 返回 403，不可用。
+
+## 2026-11-02 key3 / 阿里云补跑 / 聚美印章OCR测试 / SVTRv2
+
+- key3 存于 /home/rapidstamp_data/secrets/aliyun_key3（600）。key3 的 AppCode 与 key1 相同（之前“key1 用完”只是我们自设软上限）。key2 403 无额度。
+- 阿里云印章 OCR（stamp.market.alicloudapi.com/api/predict/ocr_official_seal）：金标补跑 107 张（只跑 VL/Qwen 不一致的），key3 计数 108（含测试），剩约 1030。
+- 金标 227 三方投票：VL=Qwen 81 对 72；VL+阿里云 70 对 69；Qwen+阿里云 2 对 2；丢弃 74。接受 153/227（67%），正确 143（93.5%）。
+- 聚美智数印章 OCR（cmapi00073285）：POST https://jmyzsb.market.alicloudapi.com/ocr/seal，form 参数 image=base64，APPCODE 鉴权，环文取 data.list[].major.words。脚本 vote3_pilot_20261102/jumei_run.py，结果 jumei_gold.jsonl，计数 jumei_calls.txt=229（含 2 次调试调用）。
+- 金标精确匹配（环文，norm 后）：
+  - single227：聚美 124，VL-FT 160*；阿里云已跑的 146 张上：阿里云 88 / 聚美 76 / VL-FT 87
+  - unseen59：聚美 31，VL-FT 48；阿里云子集 30 张：阿里云 19 / 聚美 17
+  - orig63：聚美 48，VL-FT 51；阿里云子集 42 张：阿里云 35 / 聚美 32
+  - long45：聚美 16，VL-FT 19*；阿里云子集 35 张：阿里云 13 / 聚美 10
+  - 聚美空结果（未检出）46/227。*此处 norm 口径比之前多 1–2 张（之前记作 158/18）。
+- 聚美价格：2元/50次，35元/1000次，300元/1万次，1250元/5万次，2000元/10万次，8000元/50万次。未购买。
+- SVTRv2（checkpoints/svtrv2_20261102）正常结束，未崩溃：single227 119，unseen59 35，orig63 46，long45 10，val300 270。比 A+route（98）好，但远低于 VL-FT（158）。
+- 未跑全量训练集。
