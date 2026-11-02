@@ -751,3 +751,24 @@ Findings and recommendation:
   - run_distill.sh：PL → filter → 学生（init = checkpoints/svtrv2_20261102/best.pt，lr 1.7e-4，warmup 500，30000 steps，eval_every 3000，nsynth 120000）
 - 学生训练：checkpoints/svtrv2_distill_20261102/（nohup.log），13:44 UTC 启动，~0.43 s/step，预计 17:30–18:00 UTC（北京时间 11-03 01:30–02:00）结束。
 - PARSeq 学生未启动。Gold v2 仅评估，原标签未改动。
+
+## 2026-11-03 SVTRv2 蒸馏学生结果
+- 训练正常结束（checkpoints/svtrv2_distill_20261102，30000 steps，17:09 UTC，DONE）。best.pt = step 12000（按 val300 选，272）。参数 27.76M。
+- Gold v2 每 3000 步（single227 / unseen59 / orig63 / long45 / val300）：
+  - 3000: 110 / 33 / 45 / 8 / 269
+  - 6000: 111 / 32 / 44 / 8 / 266
+  - 9000: 111 / 29 / 44 / 10 / 263
+  - 12000: 123 / 34 / 46 / 11 / 272（best）
+  - 15000: 121 / 31 / 47 / 11 / 268
+  - 18000: 121 / 34 / 47 / 11 / 266
+  - 21000: 116 / 31 / 46 / 11 / 268
+  - 24000: 120 / 33 / 45 / 13 / 270
+  - 27000: 120 / 34 / 46 / 11 / 269
+  - 30000: 120 / 33 / 46 / 11 / 269
+- 对比：旧 SVTRv2 119 / 35 / 46 / 10 / 270；VL-FT v1 teacher 159 / 48 / 51 / 18 / 269；A+route 98 / 22 / 33 / 8。
+  - 蒸馏 best 比旧 SVTRv2 single227 +4、long45 +1、unseen59 -1、orig63 持平，属小幅提升（接近波动范围）；比 A+route 明显好（+25），但离 teacher 仍差约 36（single227）。
+- 延迟（best.pt，bs1，256x256，PyTorch，中位数 / p95，`checkpoints/svtrv2_distill_20261102/latency.json`，脚本 `svtrv2_20261102/bench_latency.py`）：
+  - GPU RTX 6000 Ada：fp32 32.0 / 35.6 ms，bf16 autocast 39.1 / 43.4 ms
+  - CPU i7-8700K：8 线程 155.4 / 164.7 ms，1 线程 404.0 / 429.2 ms
+  - 对比 VL-FT teacher GPU 约 535 ms/crop。
+- 未启动 PARSeq 学生或任何其它训练；生产未动。
