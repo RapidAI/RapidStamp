@@ -789,6 +789,35 @@ Findings and recommendation:
 - dataset.zip = AI Studio / PaddleOCR 格式合成印章集（circle_Aug*.png，640x640），train 8000 + test 2000，PaddleOCR det 标注（每行 transcription + 14 点多边形：环形单位名、13 位编码、底部文字）。
 - 印章数据集/ 下 rec_seal_0.zip、rec_seal_1.zip、det_seal_0.zip 与 third/*.zip MD5 相同，已用过，跳过；处理中/rec 为空。
 - 去重（external/pool_incoming_20261103/pool_incoming.py，方法同 distill2 pool.py）：MD5 + 256 位 dHash；对训练/已见集（web_seals_cn_all crops、csd crops、third/rec_seal_0/1、det_seal_0、no_seal_0）Hamming ≤16，对 pool_20261103 MD5/≤10，对金标（gold_v2 + gold_candidates*）≤32（严格），集内 ≤10。
-- 结果：候选 20000，保留 17174（rest_train 3754、rest_test 3444、aistudio_train 7985、aistudio_test 1991）。金标近重复去掉 1126（ReST train 573、ReST test 552、AI Studio 1），列表在 gold_dups.json；其中约 200 张距离 ≤16，其余在 17–32，阈值偏严，属有意为之。与训练集重复：ReST 共 487 MD5 + 253 dHash。
+- 结果：候选 20000，保留 17174（rest_train 3754、rest_test 3444、aistudio_train 7985、aistudio_test 1991）。金标近重复去掉 1126（ReST train 573、ReST test 552、AI Studio 1），列表在 gold_dups.json；其中仅 85 张距离 0–15（此前写“约 200”有误，已更正），其余 1,041 张在 16–32，阈值偏严，属有意为之。与训练集重复：ReST 共 487 MD5 + 253 dHash。
 - 真实文字标签：labels_gt.jsonl 13730 条（ReST train 3754 为真实标注；AI Studio 9976 为合成标注，texts[0] 为环形文字）。只含去重后保留的行。
 - 输出：external/pool_incoming_20261103/{pool.jsonl, labels_gt.jsonl, gold_dups.json, stats.json, README.md, run.log}。未启动伪标注或训练，distill2 未受影响，生产未动。
+
+## 2026-11-03 最终数据集整理 datasets_final_20261103（复现训练的唯一入口）+ distill3 排队
+
+- **入口**：`/home/rapidstamp_data/datasets_final_20261103/README.md`。以后要复现或重新训练，先读它。目录说明、每个关键模型用的确切标签文件都在里面。
+- **目录结构**：
+  - `synthetic/`：AI Studio circle 数据集 9,976；synth_corpus 的 gold_style / gold_style_v2 / v2_long / long_v3 / vitb_pretrain_2m（1,760,352）；synth_names 20k。
+  - `real_labeled/`：train_clean_v3（含 CSD，以及 third_rec = rec_seal_0/1）、vote3 accepted、ring_v2 kept 三个文件、supplement、ReST train GT。
+  - `real_labeled/pseudo/`：教师伪标签，单独存放。
+  - `gold_test/`：gold_v2 共 235 张；splits.json 含 single227、unseen59、orig63、long45、multi8、val300；另有 val300 的图片和标签。
+- **文件约定**：图片全部是硬链接（`os.link`），原文件没有移动也没有删除。硬链接在源文件移动后仍有效，软链接不行；拷到别的机器用 `rsync -aH`。每个子目录都有 `labels.jsonl`（path, orig_path, text, src, split, orig_label_file）、`README.md`、`stats.json`、`MANIFEST.tsv`（md5 + 256 位 dHash）。顶层有 `MANIFEST.md5`。
+- **金标隔离**：
+  - 图片与 789 张金标参考集（gold_v2 加 candidates、verified、rescreen）比对：md5 相同，或 dHash ≤32，就剔除。
+  - 环文字等于 gold_v2 文字的行也剔除。
+  - 被剔除的行记在各目录的 `excluded_gold_neardup.jsonl`，汇总见 `excluded_summary.json`。
+  - `finalize.py` 再对 gold_v2 单独复核一遍，结果在 `VERIFY_gold_exclusion.json`。
+  - real_labeled 一项（尚未经 finalize 复核）：图片按 dHash ≤32 剔除 401 行，按金标文字剔除 428 行。这些行在原训练标签里本来就有（训练脚本只按文字过滤）。所以要逐位复现旧模型，用 `recipes/<model>/data_manifest.md5` 里列的原始标签文件；新训练用这里的 `labels.jsonl`。
+  - val300 的行已从 real_labeled 移出。
+- **复现材料**：
+  - `recipes/<model>/`：训练脚本副本、命令行、数据清单（标签文件 md5）、各 eval json 和 expected_metrics.json。覆盖 parseq_reader_large_clean_csd（生产 A）、paddleocr_vl16_ft_v1、svtrv2 base、distill1、distill2、distill3。
+  - `recipes/_env/`：三个环境的 pip freeze，torch/CUDA 版本，nvidia-smi 输出，git commit。
+  - 评测：`./eval.sh svtrv2|vl|parseq <ckpt> [tag]`。
+- **distill3 流水线**（`label_clean/distill3_20261103/run3.sh`，已用 setsid 脱离会话在后台启动，日志在 `run.log`）：
+  1. 等 distill2 的学生模型训完、GPU 空出来。
+  2. 用 VL-FT v1 教师给 ReST test（3,444 张）打伪标签（pl3.py，解码方式与 pl2 相同）。
+  3. 用 filt3.py 过滤，规则和阈值都与 filt2 相同。
+  4. 组成 `pseudo_v3_combined.jsonl`：pseudo_v2_combined + ReST test 伪标签 + ReST train GT + AI Studio train GT（AI Studio test 留作外部测试）。
+  5. 训练 `checkpoints/svtrv2_distill3_20261103`：从 distill2 best 初始化，lr 1.2e-4，30k 步，评测套件不变。
+  6. 训完自动刷新 datasets_final 的 pseudo/ 目录和 recipes。
+  - 不碰生产。
