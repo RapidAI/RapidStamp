@@ -724,3 +724,13 @@ Findings and recommendation:
 - 注意：Qwen 单独认印章较弱（金标 single227 仅 80），agree2 中约 11% 可能两边同错（试点估计）；CSD 丢弃率高（约 39%），CSD 原标签本身可信，训练时可考虑 CSD 全保留、只用投票结果清洗 nogold。
 - 未开始任何训练。
 - 目录：`/home/rapidstamp_data/label_clean/vote3_full_20261102/`（README.md 同内容）。
+
+## 2026-11-02 vote3 过滤 + VL-1.6 FT v3
+- 过滤脚本 label_clean/vote3_full_20261102/filt.py → filter_v3_stats.json / filter_v3_log.jsonl
+  - 检查 287 行 (221 改标 + qwen+ali 未改行): keep 246, revert 36 (地名被破坏/已知单位名(旧文本出现>=3次而新文本0次)/截断), drop 5 (模板文字)
+  - train_clean_v3.jsonl = nogold 10559 + CSD train 3065 (原标签) = 13624
+  - 注: 规则偏保守, 少量正确纠正也被回退 (如 青岛海尚/西南交通大学); names_lm 未找到, 用 accepted 文本频次代替
+- 训练: vl16_20261101/ft_v3.py (= ft.py, real 换成 train_clean_v3, 去掉单独 csd 行; supp x2, gs2, doc synth 不变), --epochs 1 → 4608 steps
+  - 输出 checkpoints/paddleocr_vl16_ft_v3_20261102/ (nohup.log), pid 在 vl16_20261101/ft_v3.pid; 启动 11-02 11:18, ~1.05 s/step
+- 蒸馏计划: label_clean/vote3_full_20261102/DISTILL_PLAN.md (未运行)
+- Gold v2 仅评估, 未进训练
