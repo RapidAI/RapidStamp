@@ -708,3 +708,19 @@ Findings and recommendation:
 - 聚美价格：2元/50次，35元/1000次，300元/1万次，1250元/5万次，2000元/10万次，8000元/50万次。未购买。
 - SVTRv2（checkpoints/svtrv2_20261102）正常结束，未崩溃：single227 119，unseen59 35，orig63 46，long45 10，val300 270。比 A+route（98）好，但远低于 VL-FT（158）。
 - 未跑全量训练集。
+
+## 2026-11-02 三路投票全量清洗（vote3_full_20261102）
+
+- 输入：rows.jsonl 15,683 条（nogold 12,618 + CSD train 3,065），原标签文件未改动。
+- 三路：VL-1.6 精调 best（`vlft.jsonl`，Seal Ring:/448）、qwen3-vl-plus（百炼，`qwen_full.jsonl`，15,680 条，3 条多次重试仍失败）、阿里云印章 OCR（key3，仅 VL≠Qwen 时调用，`aliyun_results.jsonl` 8,982 条）。
+- 规则（`vote_full.py`）：环文 norm 后 VL=Qwen → 接受（agree2）；否则 阿里云=VL → 接受 VL；阿里云=Qwen → 接受 Qwen；否则丢弃。`#` 后的横排行沿用旧标签。
+- 结果（`stats.json`）：
+  - 接受 12,421（agree2 6,698 / vl+ali 5,616 / qwen+ali 107），其中改标 221（`changed.jsonl`）
+  - 丢弃 3,262（三方不一致 3,259 + 无 Qwen 结果 3），见 `dropped.jsonl`
+  - nogold：接受 10,564，丢弃 2,054，改标 203；CSD：接受 1,857，丢弃 1,208，改标 18
+- 输出：`accepted.jsonl`（原记录格式，加 `vote3_tier`；改标的加 `vote3_old_text`）、`changed.jsonl`、`dropped.jsonl`、`stats.json`。
+- 阿里云 key3 计数：本次全量从 108 到 9,090（共 8,982 次）；账户上限 108+21,030=21,138，剩余约 12,048。
+- 百炼 qwen3-vl-plus：15,680 次，输入 4,231,658 token / 输出 251,349 token。
+- 注意：Qwen 单独认印章较弱（金标 single227 仅 80），agree2 中约 11% 可能两边同错（试点估计）；CSD 丢弃率高（约 39%），CSD 原标签本身可信，训练时可考虑 CSD 全保留、只用投票结果清洗 nogold。
+- 未开始任何训练。
+- 目录：`/home/rapidstamp_data/label_clean/vote3_full_20261102/`（README.md 同内容）。
