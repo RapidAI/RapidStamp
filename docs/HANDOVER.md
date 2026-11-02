@@ -684,3 +684,11 @@ Findings and recommendation:
 - 端到端（部署产物，Python ORT CPU）：unseen59 22 (.825) | single227 98 (.840) | orig63 33 (.935) | long45 8 (.780) | CSD5335 1641 (.837)，与实验目标一致。gold 路由 69/235，CSD 0。仅生产：16 | 91 | 30 | 8。结果 `deploy/ring_reader/eval/e2e_*.json`。CSD 评测用另一词表 `eval/names_lm_csd_eval.txt`（同时屏蔽 gold+CSD 名）。
 - 延迟（CPU，Python batch16）：仅生产 0.297 s/张，A+路由 0.382 s/张（gold，约 +29%，长名多跑一次）；CSD 0.296 s/张（无路由）。C++ 单张 8 线程 gold：路由 均值 885 ms / p95 1688 ms，仅生产 646 / 815 ms（与 CSD 评测并发，偏高）。
 - 部署脚本：`training/scripts/deploy_ring_reader/`。
+
+## 2026-11-02 三路投票自动清洗试点（vote3_pilot_20261102）
+- 目录：`/home/rapidstamp_data/label_clean/vote3_pilot_20261102/`（README、summary.json、vote_sample.json、vote_gold.json）。原标签未动，未生成训练 jsonl。
+- 三路：VL-1.6 精调 best（Seal Ring:/448）+ qwen3-vl-plus（百炼）+ 阿里云印章 OCR（仅 VL≠Qwen 时调用）。环文归一化后 2 路一致即接受，否则丢弃。
+- 1000 张训练样本：VL=Qwen 490；VL=旧标 901；Qwen=旧标 481。投票接受 817（同意 490 + VL/阿里云 324 + Qwen/阿里云 3），丢弃 183；接受里 801 与旧标一致，16 条改标（多数是真修正，如 郸都→郫都、信鹤→信鸽、西院→西苑）。
+- 金标 227 单章：qwen3-vl-plus 仅 80（放大 896：84，思考模式：91），VL-FT 158。unseen59 28 vs 48，orig63 20 vs 51，long45 9 vs 18。VL=Qwen 81 张中对 72（89%）；VL+阿里云一致 29/29 全对。金标中有 107 张因阿里云额度用完没跑。
+- 结论：Qwen3-VL-plus 认印章远弱于 VL-FT，当第二票时 VL=Qwen 一致也有约 11% 两边同错。实际起作用的是 VL-FT 加阿里云。
+- 费用：百炼约 1.8 元（每张约 230 输入 / 18 输出 token，约 0.0004 元/张）；阿里云 key1 用了 549 次，现已用完；key2 返回 403，不可用。
