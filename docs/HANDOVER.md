@@ -829,3 +829,25 @@ Findings and recommendation:
 - Typical errors: place-name/company-name hallucination from LM prior (宁海->宁夏, 青岛坤罡->北京申瑞星), dropped or invented characters, reads surrounding document text instead of the seal, appends inner text (专用章, numbers).
 - Verdict: not usable zero-shot; fine-tuning possible (<1B) but no clear advantage over PaddleOCR-VL-1.6 FT (already ~0.9B class teacher). Not pursued without user approval.
 - Script/results: eval_xiaomi_ocr_20261103/{eval_xiaomi.py,result_*.json,preds_*.jsonl,README.md}.
+
+## 2026-11-03 Distill2 结果（大规模伪标蒸馏，SVTRv2 学生）
+- 伪标（label_clean/distill2_20261103/pseudo_pool_stats.json）：pool 64,854 → keep 15,269（23.5%）。阈值 min_lp = -0.64416（val300 保留 282，全量正确 280/300）。丢弃：长度 21,459、低置信 19,069、非中文 7,614、模板 1,273、gold 文本 167、地名可疑 3。
+  - 按来源 keep：v2_raw_crops 8,479、det_third_det_seal_0 5,180、v2_raw_rejected 1,504、v2_foreign 71、det_aliyun_firstscrape 35（该来源几乎全被丢，检测裁剪质量差）。
+  - pseudo_v2_combined.jsonl = 15,269 + distill1 的 1,385 = 16,654 行。
+- 学生训练：checkpoints/svtrv2_distill2_20261103，30000 步正常结束（04:09 UTC，DONE）。best.pt 按 val300 选 = step 15000（272，同分取先到者）；last.pt = step 30000（val300 也是 272）。
+- Gold v2 每 3000 步（single227 / unseen59 / orig63 / long45 / val300）：
+  - 3000: 126 / 39 / 45 / 13 / 270
+  - 6000: 134 / 40 / 46 / 15 / 268
+  - 9000: 133 / 40 / 44 / 16 / 271
+  - 12000: 134 / 38 / 46 / 16 / 269
+  - 15000: 133 / 38 / 47 / 15 / 272（best.pt）
+  - 18000: 137 / 37 / 47 / 16 / 271
+  - 21000: 134 / 36 / 47 / 16 / 272
+  - 24000: 140 / 39 / 49 / 16 / 271（gold 最高）
+  - 27000: 140 / 40 / 48 / 16 / 270
+  - 30000: 139 / 39 / 48 / 16 / 272（last.pt）
+- 对比：distill1 best 123 / 34 / 46 / 11 / 272；VL-FT v1 teacher 159 / 48 / 51 / 18 / 269；A+route 98 / 22 / 33 / 8。
+  - best.pt(15000) 比 distill1：single227 +10、unseen59 +4、orig63 +1、long45 +4。last.pt(30000) 比 distill1：+16 / +5 / +2 / +5，val300 持平。离 teacher 还差约 20（single227）。比 A+route +41。
+  - 注意：val300 在 268–272 之间饱和，用它选 best 区分不了，后半程 gold 更好。建议以后用 last.pt 或 val300+single227 之外的独立验证集选点（不能用 gold 选点）。
+- distill3（label_clean/distill3_20261103/run3.sh）已按计划自动接上：ReST test 伪标 3,444 → keep 2,896（低置信 521、长度 14、gold 文本 13）；pseudo_v3_combined = 16,654 + 2,896 + ReST train GT 3,736 + AI Studio train GT 7,985 = 31,271；学生 checkpoints/svtrv2_distill3_20261103 04:25 UTC 启动，init = distill2 best.pt（step 15000），~0.414 s/step，预计 ~08:00–08:15 UTC（北京时间 16:00–16:15）结束。
+- 未动生产，未启动其它任务。
