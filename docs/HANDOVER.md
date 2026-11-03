@@ -851,3 +851,22 @@ Findings and recommendation:
   - 注意：val300 在 268–272 之间饱和，用它选 best 区分不了，后半程 gold 更好。建议以后用 last.pt 或 val300+single227 之外的独立验证集选点（不能用 gold 选点）。
 - distill3（label_clean/distill3_20261103/run3.sh）已按计划自动接上：ReST test 伪标 3,444 → keep 2,896（低置信 521、长度 14、gold 文本 13）；pseudo_v3_combined = 16,654 + 2,896 + ReST train GT 3,736 + AI Studio train GT 7,985 = 31,271；学生 checkpoints/svtrv2_distill3_20261103 04:25 UTC 启动，init = distill2 best.pt（step 15000），~0.414 s/step，预计 ~08:00–08:15 UTC（北京时间 16:00–16:15）结束。
 - 未动生产，未启动其它任务。
+
+## 2026-11-03 300M 学生（已准备，暂缓）+ soft-label KD 试验（进行中）
+### A. 300M 学生 VLEnc300M（用户 t173u 批准；t177u 改为先在 28M 上试 soft KD，故暂缓长训）
+- 结构：VL-FT v1 teacher（checkpoints/paddleocr_vl16_ft_20261101/best）的 SigLIP 视觉塔（hidden 1152, 16 heads, patch 14）截取前 18/27 层 → 448×448 输入 = 32×32 patch → 2×2 合并 LN+Linear(4608→512) + 可学位置 → NRTR 式 AR 解码器 4 层 d512 8 头 FFN2048，词表 6627（同 SVTRv2 distill3 vocab.json）。
+- 参数：301.96M（视觉 275.83M + 合并/解码 26.13M）。视觉权重直接继承 teacher（OCR 预训练 + 印章 FT），解决了以前 ViT-B 从零失败的问题。
+- 自写 batched 编码前向已与 HF PaddleOCRVisionTransformer 数值对齐（27 层全量 maxdiff 0.0，vlenc300m_20261103/verify_encoder.py），patch 顺序 row-major。
+- 数据：与 svtrv2_distill3 同源（train_clean_v3 ×2、pseudo_v3_combined ×2、supp ×4、gs2/gs2_long/long_v3 合成、synth_doc 12 万），金标文本过滤。独立选点集 val_real：600 条（md5(path) 排序取自 train_clean_v3 + ReST train GT），从训练中剔除，写在 out/val_real.jsonl。
+- 脚本：vlenc300m_20261103/train_vlenc300m.py（--resume 可续训；--gc 梯度检查点）。环境 /home/znsoft/miniconda3/bin/python（torch 2.13, transformers 5.19）。
+- Smoke（checkpoints/vlenc300m_smoke2_20261103，300 步）：bs32 无 gc 显存 31.3G，2.50 s/step（与 lora.py 共享 GPU）；gc 开 7.8G、3.19 s/step。300 步时 loss 8.9→5.8，金标 exact 0（解码器从零、仅 300 步，预期）。全链路（训练/greedy/eval/存档）跑通。
+- 估算：30000 步 ≈ 21 h；15000 步 ≈ 10.5 h。启动命令（待 soft KD 结论）：
+  cd /home/rapidstamp_data/vlenc300m_20261103 && setsid nohup /home/znsoft/miniconda3/bin/python train_vlenc300m.py --steps 15000 > run.log 2>&1 &
+### B. Soft-label（logit 级）KD 在 28M SVTRv2 上（用户 t177u）
+- Teacher 打分：label_clean/softkd_20261103/teacher_soft.py。VL-FT v1 以训练标签 teacher-forcing（PL 行=teacher 自己的输出，GT 行=人工/投票标签），一次前向取每步 top-50 token 概率，按 token 首字聚合成字符分布存 top-10。BPE 多字 token 内部的后续字符位置无软标（null），末位存 EOS 概率。输入行：pseudo_v3_combined + train_clean_v3 + supp（金标文本过滤，去重）≈4.5 万。约 0.047 s/img，~35 min。输出 teacher_soft_top10.jsonl（+ .md5, soft_stats.json 覆盖率）。
+- 学生：svtrv2_20261102/train_svtrv2_softkd.py（由 make_softkd_script.py 从 train_svtrv2_distill.py 打补丁生成）。SVTRv2+NRTR（本就是 AR 解码头，无 CTC 分支）。loss = CE(hard, ls0.1) + 0.5·T²·CE(teacher_T, student_T)，T=2，仅在有软标的位置。
+- 对照：同脚本 --alpha 0（hard-only），同 init（distill3 last.pt）、同数据、15000 步、lr 6e-5、warmup 300，公平比较。
+- 选点：val438（ring_v2 val split 全部 438 条，从未进训练）exact+1NED；金标只记录不选点；保留 last.pt。
+- 流水线：label_clean/softkd_20261103/run_softkd.sh → run.log（每段时间戳 UTC，末尾汇总两组每 3000 步的金标 eval 并写 ALL DONE）。输出 checkpoints/svtrv2_softkd_20261103、checkpoints/svtrv2_hardctl_20261103。
+- 判定：softkd last/峰值 在 single227/unseen59/orig63/long45 上明显好于 hardctl 才把 soft KD 用到 300M 学生（加 --soft 支持到 train_vlenc300m.py）。
+- 未动生产；lora.py（/home/znsoft/qlora）未动。
