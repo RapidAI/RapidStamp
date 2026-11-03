@@ -875,3 +875,9 @@ Findings and recommendation:
 - 显存不够并行（对照占 ~24GB，300M 需 ~31GB），故排队：`vlenc300m_20261103/run_vlenc300m.sh`（setsid nohup），等 softkd 流水线 ALL DONE 且空闲显存 ≥33GB 后自动开训，失败自动 resume 重试 3 次。
 - 参数：--steps 15000 --warmup 1000 --bs 32 --gc 0，输出 checkpoints/vlenc300m_20261103（best 按 val_real 选，gold 仅报告），日志 vlenc300m_20261103/run.log（以 ALL DONE 结尾）。
 - 预计：约 21:50 开始，约 次日 08:30–09:00 北京完成。之后测 GPU/CPU 延迟、写 docs/MODEL_300M.md。
+## 2026-11-03 synth_realistic_20261103 — realistic seal generator (stage 1 + stage 2 refiner)
+- Server: /home/rapidstamp_data/synth_realistic_20261103 (repo/ = standalone package `seal_generator`, CLI `seal-gen`; GitHub RapidAI/seal_generator, pushed only after realism improves). Recipe: datasets_final_20261103/recipes/synth_realistic_20261103.md.
+- Stage 1 (procedural, exact label): real names (synth/names.txt) with gold_v2/val300 texts blocked (+5-gram); fonts pretrained/fonts; ink physics (bleed, pressure field, missing strokes, double stamp, neighbour seal, multiply blend); real document backgrounds from third/det_seal_0 avoiding seal polygons and rejecting crops with red/blue content; scanner/photo/photocopy capture, JPEG. No gold images used.
+- Realism v1 (ResNet50 KID / real-vs-synth linear probe acc, 400 v 400; ideal 0 / 0.5): stage1 0.031/0.970; long_v3 0.029/0.989; v2_long 0.039/0.990; gold_style_v2 0.041/0.993; gold_style 0.069/0.999.
+- Stage 2: CUT refiner (src/seal_generator/refine/cut.py: residual generator, PatchNCE, identity NCE, Sobel edge consistency) trained on znsoft-gpu (ssh -p 33, RTX 4090) in /data/linux/rapidstamp, conda env /data/linux/rapidstamp/conda_envs/rapidstamp. Real domain = datasets_final real_labeled crops only (gold excluded). Refined images must pass an OCR-consistency filter (distill3 student must read the label) before use.
+- Not used in any training yet.
