@@ -870,3 +870,8 @@ Findings and recommendation:
 - 流水线：label_clean/softkd_20261103/run_softkd.sh → run.log（每段时间戳 UTC，末尾汇总两组每 3000 步的金标 eval 并写 ALL DONE）。输出 checkpoints/svtrv2_softkd_20261103、checkpoints/svtrv2_hardctl_20261103。
 - 判定：softkd last/峰值 在 single227/unseen59/orig63/long45 上明显好于 hardctl 才把 soft KD 用到 300M 学生（加 --soft 支持到 train_vlenc300m.py）。
 - 未动生产；lora.py（/home/znsoft/qlora）未动。
+### 2026-11-03 20:40 北京 更新：300M 学生已排队启动（仅硬标签）
+- soft-label KD 结果：softkd 142/38/47/18 vs distill3 144/41/47/17，无增益 → 300M 用硬标签。
+- 显存不够并行（对照占 ~24GB，300M 需 ~31GB），故排队：`vlenc300m_20261103/run_vlenc300m.sh`（setsid nohup），等 softkd 流水线 ALL DONE 且空闲显存 ≥33GB 后自动开训，失败自动 resume 重试 3 次。
+- 参数：--steps 15000 --warmup 1000 --bs 32 --gc 0，输出 checkpoints/vlenc300m_20261103（best 按 val_real 选，gold 仅报告），日志 vlenc300m_20261103/run.log（以 ALL DONE 结尾）。
+- 预计：约 21:50 开始，约 次日 08:30–09:00 北京完成。之后测 GPU/CPU 延迟、写 docs/MODEL_300M.md。
