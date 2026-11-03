@@ -821,3 +821,11 @@ Findings and recommendation:
   5. 训练 `checkpoints/svtrv2_distill3_20261103`：从 distill2 best 初始化，lr 1.2e-4，30k 步，评测套件不变。
   6. 训完自动刷新 datasets_final 的 pseudo/ 目录和 recipes。
   - 不碰生产。
+## Xiaomi-OCR-0 zero-shot seal test (2026-11-03)
+- Model: xiaomi-research/Xiaomi-OCR-0 (https://huggingface.co/xiaomi-research/Xiaomi-OCR-0), 0.85B params (Qwen3.5-0.8B-Base + vision), Apache-2.0, released 2026-09-30. Local copy: /home/rapidstamp_data/eval_xiaomi_ocr_20261103/model.
+- Run: transformers 5.19 in base miniconda (no installs), bf16, greedy, max_new_tokens 96, alongside distill2 on RTX 6000 Ada (~3 GB VRAM).
+- Exact match (best prompt seal_cn: "this is a seal, output only the ring main text"): single227 47 / unseen59 18 / orig63 9 / long45 2 / val300 125. JSON-KIE prompt: 30/6/10/1/98. Far below VL-FT v1 (158-160/47-48/51-52/18-19) and SVTRv2 distill1 (123/34/46/11/272).
+- Latency: 0.28 s/crop mean (seal_cn), 0.55 s (kie) on GPU without fla/causal_conv1d kernels.
+- Typical errors: place-name/company-name hallucination from LM prior (宁海->宁夏, 青岛坤罡->北京申瑞星), dropped or invented characters, reads surrounding document text instead of the seal, appends inner text (专用章, numbers).
+- Verdict: not usable zero-shot; fine-tuning possible (<1B) but no clear advantage over PaddleOCR-VL-1.6 FT (already ~0.9B class teacher). Not pursued without user approval.
+- Script/results: eval_xiaomi_ocr_20261103/{eval_xiaomi.py,result_*.json,preds_*.jsonl,README.md}.
