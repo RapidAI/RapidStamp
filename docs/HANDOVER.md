@@ -1,5 +1,7 @@
 # RapidStamp ring-text handover
 
+**Standing decision (2026-11-04 Asia/Shanghai):** drop multi-seal (multi8) recognition. Production path is the vision/detection API crop first, then recognition only on single-seal crops. Earlier multi8 metrics in this file are historical notes only. Production code and model routing are unchanged. Full text is under Decisions.
+
 Updated 2026-10-29T05:50:00Z. This file is the operational handover. `docs/data.md` and `docs/research.md` are the Chinese measured notes; `docs/sdk.md` is the published detection plus class-routed CTC / PP-OCRv5 SDK. Those three are not this recognizer. The Chinese notes still stop at the 1,050,016 pretrain snapshot; the finished scores are in the experiments section below.
 
 Update this file after every meaningful step, measured result, or change to data or models. Commit it on `main`, then copy `docs/*.md` to `/home/rapidstamp_data/docs/` on the training machine. Do not put passwords, the SSH password, or Aliyun APPCODEs in this file or in git.
@@ -420,6 +422,7 @@ DataLoader workers use spawn. At process shutdown you may see `Exception ignored
 
 ## Decisions
 
+- **Standing decision, 2026-11-04 Asia/Shanghai: drop multi-seal (multi8) recognition.** Do not train, score, or route a recognizer on an image or crop that contains more than one seal. The production path is: the vision/detection API crops first, then recognition runs only on those single-seal crops. Whole-image multi-seal reading, detector-split multi8 eval, mask-out multi, and overlapping-seal detector work stop here. Earlier multi8 figures in this file stay as historical notes only: hit counts, best 1-NED, mask-out scores on 16 seals, VL line counts, and notes that multi8 is still 0. They are not a current target and are not a reason to resume that work. This decision does not change production code or model routing.
 - The user stopped the unwrap-plus-CTC track. The long v2 train was killed. The baseline checkpoint stays, and its gold number above is the reference. Arc-only unwrap code is on `main` (`ring_text.py`) and on the server, and it must not be trained again. Aliyun rows have no angle, and the full-circle strips mostly started at the default 140° because the ink gap was under 40°.
 - The recognizer reads the whole crop. A direct reader was chosen because unwrapping was dropped, and the model still has to export to ONNX for C++.
 - The first direct reader (ViT-Tiny, 224, learned queries) was trained to completion and does not approach Aliyun. Errors are generic company and bureau shells, not a single repeated string. That is why the autoregressive head was abandoned and why scale moved to synthetic pretraining.
@@ -450,6 +453,7 @@ VL first-line checks can use `/home/rapidstamp_data/lexicons/china_place_names/`
 8. `torch.load` may need `weights_only=False` on a later PyTorch. There is still no mid-run resume.
 9. After each meaningful step, update this file, commit it on `main`, and refresh `/home/rapidstamp_data/docs/*.md`.
 10. VL first-line proofreading can use `lexicons/china_place_names/`. Confident place or suffix fixes stay local. Ambiguous place names and organization-character errors go to Aliyun. Do not rewrite existing Aliyun labels.
+11. Standing decision 2026-11-04 Asia/Shanghai: multi-seal (multi8) recognition is dropped. Production path is vision/detection API crop first, then recognition only on single-seal crops. Prior multi8 metrics in this file are historical notes only. Do not resume that work. Production code and model routing are unchanged.
 
 Code on `main` for this track starts at `fb7b45d` (synthetic pretraining). Earlier direct-reader commits are `85cc0c7`, `edb34ed`, `d8cd585`, and the score note `e347e6e`.
 
@@ -478,12 +482,12 @@ Label noise on the 164 single candidates (hard-biased sample, not a pool-wide ra
 
 ## 2026-10-30 nogold 对比评测结果（自动检查写入）
 文件：gold_v2/eval_nogold_20261030.json、eval_nogold_gs_20261030.json；日志 logs/eval_nogold_auto_20261030.log。均为 S@512。
-| 模型 | 227单章 exact greedy/lex | 1-NED lex | 59 未见子集 exact greedy/lex | 已见105 exact lex | 长名45 lex | 低对比44 lex | 多章8 hit / best1NED |
+| 模型 | 227单章 exact greedy/lex | 1-NED lex | 59 未见子集 exact greedy/lex | 已见105 exact lex | 长名45 lex | 低对比44 lex | 多章8 hit / best1NED (historical) |
 |---|---|---|---|---|---|---|---|
 | 生产 parseq_reader_large (step 325024) | 84 / 91 | 0.839 | 18 / 16 | 45 | 8 | 29 | 0 / 0.345 |
 | nogold (step 375008) | 75 / 80 | 0.812 | 19 / 19 | 34 | 3 | 24 | 0 / 0.287 |
 | nogold+gold风格合成 (step 375008) | 73 / 79 | 0.797 | 20 / 21 | 32 | 3 | 22 | 0 / 0.251 |
-结论：生产模型的领先主要来自 gold 近重复泄漏（已见子集 45 vs 34）；在真正未见的 59 张上 nogold 系列持平略好。gold 风格合成没有带来整体提升，长名/低对比反而下降。多章 8 张三者都 0 命中。未切换生产（需用户批准）。
+结论：生产模型的领先主要来自 gold 近重复泄漏（已见子集 45 vs 34）；在真正未见的 59 张上 nogold 系列持平略好。gold 风格合成没有带来整体提升，长名/低对比反而下降。多章 8 张三者都 0 命中（历史记录，见 Decisions 2026-11-04）。未切换生产（需用户批准）。
 
 ## Gold-style synth v2 (2026-10-30, done)
 - Diagnosis of v1 (gold_rescreen/diag_gs.py): v1 synth was too pale/gray, loosely cropped (~320px vs real gold long-name ~145px), long names too short (median 18 vs 23), and low-contrast was pale red, whereas gold low-contrast is desaturated gray copies (ink frac ~0.004, bg ~189). Error pattern: on long names the models drop 1-2 chars.
@@ -494,8 +498,8 @@ Label noise on the 164 single candidates (hard-biased sample, not a pool-wide ra
   - unseen59: prod 18|16, nogold 19|19, gs 20|21, gs2 18|16
   - long45: prod 4|8, nogold 2|3, gs 3|3, gs2 2|2
   - low44: prod 28|29, nogold 23|24, gs 19|22, gs2 22|24
-  - multi8 mean best 1-NED (greedy): prod .345, nogold .287, gs .251, gs2 .283 (lex .312)
-- Conclusion: v2 removes the v1 low-contrast regression (back to nogold level) but does not help long names or unseen; synth-style alone is not the lever. Production unchanged. Next ideas: long-name fix likely needs decoder max-len/aspect (ring unwrap resolution) rather than more synth; multi-seal needs detector-side separation.
+  - multi8 mean best 1-NED (greedy, historical): prod .345, nogold .287, gs .251, gs2 .283 (lex .312)
+- Conclusion: v2 removes the v1 low-contrast regression (back to nogold level) but does not help long names or unseen; synth-style alone is not the lever. Production unchanged. Next ideas at the time: long-name fix likely needs decoder max-len/aspect (ring unwrap resolution) rather than more synth; multi-seal needs detector-side separation. Historical (superseded 2026-11-04 Asia/Shanghai): that multi-seal next idea is closed. The multi8 numbers in this section stay as notes only. See Decisions.
 
 ## Overnight wrap-up (2026-10-31 ~04:36-05:30 Asia/Shanghai)
 
@@ -524,6 +528,7 @@ Long-name 1-NED lex: prod 0.7776 / nogold 0.7223 / len32 0.7167. **len32 did not
 16 seals / 8 multi images, exact / mean 1-NED: large greedy 3/0.6582, lex 4/0.6626; nogold 4/0.6434, 4/0.6439; len32 4/0.6184, 4/0.6281 (whole-crop baseline best 1-NED ~0.345).
 Detector on 227 singles: 1 box 220, 0 box 3, 2 boxes 4. Negatives (8): 6 got a box (gc2_117/139/161/170/175/178), 2 none.
 Outputs: `gold_v2/eval_multi_3m_u_p2_20261031.json` (identical to `..._p2_s0.25_n0.45_20261031.json`), logs `logs/det_multi_3m_*_20261031.log`.
+Historical note (2026-11-04 Asia/Shanghai): these multi8 numbers stay for the record. Multi-seal recognition is dropped. See Decisions.
 
 ### 4. TrOCR diagnosis (gold_rescreen/trocr_diag.py) and v2 retrain
 - v1 (`checkpoints/trocr_seal_base`, 8 ep / 6760 steps) val exact peaked 0.0506.
@@ -544,7 +549,7 @@ Outputs: `gold_v2/eval_multi_3m_u_p2_20261031.json` (identical to `..._p2_s0.25_
 ### Follow-up 2026-10-31 09:50 CST (results filled in)
 - CSD test (5335 crops, 61 names, all unseen): large greedy 819 / 0.76378, lex 902 / 0.76987; nogold greedy 921 / 0.78001, lex 985 / 0.78455; nogold_len32 greedy 825 / 0.76741, lex 909 / 0.77590; vitb_finetune greedy 954 / 0.77637, lex 1034 / 0.78196. nogold beats production on CSD. Production unchanged.
 - TrOCR v2 (`eval_trocr_v2_20261031.json`): all_single 11/227 1-NED 0.32736 (beam1), 0.31252 (beam4); orig63 0/63; unseen59 4/59 0.40692. 217.3M params, bs1 greedy 186.4 ms, peak 7107 MB. Still far below PARSeq; do not invest further without a pretrained Chinese seal decoder pretrain.
-- det_multi (pad 2, score 0.25, NMS 0.45), 8 multi images / 16 seals: large greedy 3/16 0.6582, lex 4/16 0.6626; nogold 4/16 0.6434 (lex 0.6439); len32 4/16 0.6184 (lex 0.6281). Single images: 220 one box, 3 zero, 4 two.
+- det_multi (pad 2, score 0.25, NMS 0.45), 8 multi images / 16 seals (historical note only, standing decision 2026-11-04): large greedy 3/16 0.6582, lex 4/16 0.6626; nogold 4/16 0.6434 (lex 0.6439); len32 4/16 0.6184 (lex 0.6281). Single images: 220 one box, 3 zero, 4 two.
 - len32 on gold v2 unseen59: greedy 18 / 0.80229, lex 20 / 0.81056 (nogold greedy 19 / 0.80319); orig63 and long_name worse than nogold. Not adopted.
 - ReST: `external/rest/` is empty. No ReST archive on /home/rapidstamp_data, /home/znsoft, /tmp, znsoftpc user profile, or the bot box. `/home/mayong` (/dev/sdc, ext3) is mounted `emergency_ro` and returns Input/output error; the earlier ReST/Paddle archives were probably there (`/home/mayong/datasets/...`). Needs disk check (fsck) by the user before ReST can be used.
 
@@ -560,12 +565,13 @@ Driver `gold_rescreen/bx_run_cand_20261031.sh` (nohup; log `logs/cand_20261031.n
 - User review merge path: when `label_clean/review_20261030/review.csv` is filled, apply corrections onto a NEW copy of `kept_nogold_vote_fix_20261030.jsonl` (key = file) and rerun Run A cmd with the new --kept.
 - **Mask-out multi** (`gold_rescreen/bx_det_multi_mask.py`, blanks other boxes' ellipses x1.05 outside own ellipse with median paper color; PAD 2, MINFRAC 0.3, score 0.25, NMS 0.45) on existing models: large 3/16 greedy (1-NED 0.6582), 4/16 lex (0.6626); nogold 4/16 (0.630 / 0.635); vitb_ft 4/16 (0.6417 / 0.6666). **No gain vs no-mask** - remaining errors are 1-2 chars per seal, not cross-seal bleed; gc2_148 and gc2_169 still one merged box. `gold_v2/eval_multi_mask_base_20261031.json`.
 - **Detector fine-tune: blocked.** Only `seal_det.onnx` (bundled) exists; no detector training code or PyTorch/Paddle weights on the server, no ultralytics. Need the original detector training source/weights before overlapping-seal synth can be used.
+- Historical (2026-11-04 Asia/Shanghai): mask-out multi and the overlapping-seal detector follow-up are closed with the multi-seal track. The numbers above stay as notes only. See Decisions.
 
 ## 2026-10-31 candidate results (cand_20261031, finished)
 Run `cand_20261031` started 2026-10-31 16:04 CST and ended 19:24 CST (`logs/cand_20261031.start` / `.end`). **Production model NOT swapped** (still `parseq_reader_large` step 325,024). Sources: `gold_v2/eval_cand_20261031.json`, `external/csd/eval_csd_cand_20261031.json`, `gold_v2/eval_multi_mask_{base,cand}_20261031.json`, `label_clean/vote_fallback_*_vitb_20261031.json`.
 A = `parseq_reader_large_clean_csd` (step 150,016), B = `parseq_reader_large_clean_csd_long` (step 175,008). Cells are exact / 1-NED, greedy | lex.
 
-| Model | **gold v2 unseen59** (primary) | gold v2 single 227 | gold multi 8 imgs (mean best 1-NED) | CSD test 5335 | mask-out multi 16 seals |
+| Model | **gold v2 unseen59** (primary) | gold v2 single 227 | gold multi 8 imgs (mean best 1-NED, historical) | CSD test 5335 | mask-out multi 16 seals (historical) |
 |---|---|---|---|---|---|
 | production `parseq_reader_large` | 18 / 0.81083 \| 16 / 0.81263 | 84 / 0.83372 \| 91 / 0.83883 | 0.34541 \| 0.34541 | 819 / 0.76378 \| 902 / 0.76987 | 3 / 0.6582 \| 4 / 0.6626 |
 | `parseq_reader_large_nogold` | 19 / 0.80319 \| 19 / 0.80688 | 75 / 0.80551 \| 80 / 0.81174 | 0.28575 \| 0.28673 | 921 / 0.78001 \| 985 / 0.78455 | 4 / 0.630 \| 4 / 0.635 |
@@ -573,7 +579,7 @@ A = `parseq_reader_large_clean_csd` (step 150,016), B = `parseq_reader_large_cle
 | **A** clean_csd | **21 / 0.81979 \| 22 / 0.82290** | 79 / 0.81856 \| 92 / 0.82819 | 0.29134 \| 0.30698 | **1566 / 0.83314 \| 1641 / 0.83654** | **5 / 0.6638 \| 5 / 0.6638** |
 | B clean_csd_long | 18 / 0.80294 \| 22 / 0.81333 | 71 / 0.80818 \| 82 / 0.81567 | 0.26357 \| 0.26357 | 1548 / 0.83302 \| 1573 / 0.83577 | 4 / 0.6682 \| 4 / 0.6682 |
 
-Multi (8 images) hit_any is 0 for every model. Other gold groups (lex): orig63 prod 30, nogold 27, vitb 29, A 33, B 26; long_name (45) prod 8, nogold 3, vitb 4, A 2, B 3; odd_shape (30) prod 11, A 10, B 10; low_contrast (44) prod 29, A 28, B 24. Production saw 105 of the new164 gold images in training (new164_seen_in_train), so its 227 number is inflated; unseen59 is the fair comparison.
+Multi (8 images) hit_any is 0 for every model (historical note only; see Decisions 2026-11-04). Other gold groups (lex): orig63 prod 30, nogold 27, vitb 29, A 33, B 26; long_name (45) prod 8, nogold 3, vitb 4, A 2, B 3; odd_shape (30) prod 11, A 10, B 10; low_contrast (44) prod 29, A 28, B 24. Production saw 105 of the new164 gold images in training (new164_seen_in_train), so its 227 number is inflated; unseen59 is the fair comparison.
 
 Vote fallback (`bx_vote.py`, model X lex vs vitb_finetune lex, accept only identical strings, else route to Aliyun; simulated, no API calls):
 
@@ -586,8 +592,8 @@ Vote fallback (`bx_vote.py`, model X lex vs vitb_finetune lex, accept only ident
 (`vote_fallback_cand_20261031.json` is the same content as the B file.) The rule routes ~64-70% of gold and ~87% of CSD to fallback, and accepted labels are still only 63-87% correct, so it is not a usable auto-labeling filter as is.
 
 Findings and recommendation:
-- A is the best candidate: unseen59 22/59 lex (+6 vs production lex 16, +4 vs production's best 18 greedy; 1-NED 0.82290 vs 0.81263), best greedy 21/59, CSD +739 exact lex (1641 vs 902; note A/B saw 3065 CSD-train crops from 22 names that are name-disjoint from CSD test, so part of this is domain adaptation), best mask-out 5/16, orig63 33 vs 30.
-- A regresses on long names: long_name lex 2/45 vs production 8/45, and multi-image mean 1-NED 0.307 vs 0.345.
+- A is the best candidate: unseen59 22/59 lex (+6 vs production lex 16, +4 vs production's best 18 greedy; 1-NED 0.82290 vs 0.81263), best greedy 21/59, CSD +739 exact lex (1641 vs 902; note A/B saw 3065 CSD-train crops from 22 names that are name-disjoint from CSD test, so part of this is domain adaptation), best mask-out 5/16 (historical multi-seal note), orig63 33 vs 30.
+- A regresses on long names: long_name lex 2/45 vs production 8/45, and multi-image mean 1-NED 0.307 vs 0.345 (historical multi-seal note).
 - B (long v3 synth, hard-prob 0.25) does not help long names (3/45) and is below A on nearly everything. Do not adopt the long v3 recipe as is.
 - unseen59 has only 59 images; +4 to +6 is a signal, not a settled result. Recommend A as the next production candidate, but do not promote it until the long-name regression is checked (for example, route len>=14 to production or Aliyun, or add real long names) and the user approves. Production unchanged.
 ## 2026-11-01 Long-name labeling batch + length routing
@@ -667,7 +673,7 @@ Findings and recommendation:
 - Zero-shot, prompt `Seal Recognition:`, native size, full multi-line output; ring = first line, full = lines joined by `#`. No lexicon post-correction (VL has no beam scores to rescore; not applied).
   - ring exact / 1-NED: **unseen59 39/59 (0.964)**, single227 144/227 (0.934), orig63 50/63 (0.976), **long45 18/45 (0.899)**. Ref A+route lex: 22/98/33/8.
   - Full text incl `#` lines: single227 65/227 (0.718) - center-line formatting differs from our labels.
-  - Multi (8 imgs/16 seals): whole image 8/16 seals appear as an output line; detector-split crops (`multi_splits/3m_p2_s0.25_n0.45_20261031`, 15 crops) 7/16. PARSeq best was 5/16.
+  - Multi (8 imgs/16 seals), historical note only (standing decision 2026-11-04; not a current target): whole image 8/16 seals appear as an output line; detector-split crops (`multi_splits/3m_p2_s0.25_n0.45_20261031`, 15 crops) 7/16. PARSeq best was 5/16.
   - CSD test random 1000 (seed 0): 678/1000 exact (0.881). A = 1641/5335 (30.8%), prod 902/5335.
   - Bias split by gold-image pool label source: src_user (orig63) 50/63; src_vl 21/27 (0.940); src_nonvl 73/137 (0.914). VL is still far ahead on non-VL-sourced and user-only gold, so the lead is not just label bias.
   - Latency median 535 ms/crop bs1 (HF generate, no vLLM), peak alloc 1.96 GB.
@@ -800,7 +806,7 @@ Findings and recommendation:
   - `synthetic/`：AI Studio circle 数据集 9,976；synth_corpus 的 gold_style / gold_style_v2 / v2_long / long_v3 / vitb_pretrain_2m（1,760,352）；synth_names 20k。
   - `real_labeled/`：train_clean_v3（含 CSD，以及 third_rec = rec_seal_0/1）、vote3 accepted、ring_v2 kept 三个文件、supplement、ReST train GT。
   - `real_labeled/pseudo/`：教师伪标签，单独存放。
-  - `gold_test/`：gold_v2 共 235 张；splits.json 含 single227、unseen59、orig63、long45、multi8、val300；另有 val300 的图片和标签。
+  - `gold_test/`：gold_v2 共 235 张；splits.json 含 single227、unseen59、orig63、long45、multi8、val300（multi8 仅为历史评测划分，不再作为目标）；另有 val300 的图片和标签。
 - **文件约定**：图片全部是硬链接（`os.link`），原文件没有移动也没有删除。硬链接在源文件移动后仍有效，软链接不行；拷到别的机器用 `rsync -aH`。每个子目录都有 `labels.jsonl`（path, orig_path, text, src, split, orig_label_file）、`README.md`、`stats.json`、`MANIFEST.tsv`（md5 + 256 位 dHash）。顶层有 `MANIFEST.md5`。
 - **金标隔离**：
   - 图片与 789 张金标参考集（gold_v2 加 candidates、verified、rescreen）比对：md5 相同，或 dHash ≤32，就剔除。
@@ -890,13 +896,20 @@ Findings and recommendation:
 
 ### 2026-11-04 09:40 北京 300M 学生 VLEnc300M 完成（详见 docs/MODEL_300M.md）
 - 训练 2026-11-03 14:14–20:59 UTC，15,000 步，1.61 s/step，显存 31.4GB；best.pt = last = step15000（val_real 570/600），md5 dc714f81a089aae9582314b642351a76。
-- 金标 exact single227/unseen59/orig63/long45 = **167/45/54/18**；对比 VL-FT v1 teacher 159/48/51/18、原始 PaddleOCR-VL 144/39/50/18、distill3 144/41/47/17。single227 首次超过 teacher，unseen59 低 3。multi8 仍 0。
+- 金标 exact single227/unseen59/orig63/long45 = **167/45/54/18**；对比 VL-FT v1 teacher 159/48/51/18、原始 PaddleOCR-VL 144/39/50/18、distill3 144/41/47/17。single227 首次超过 teacher，unseen59 低 3。multi8 仍 0（历史记录，不再作为目标；见 Decisions 2026-11-04）。
 - 延迟（vlenc300m_20261103/bench_latency.py，gold 前 40 张 bs1 中位）：GPU fp32 63.7 ms、bf16 57.5 ms（仅编码 34.9 ms）；CPU 8 线程 1828 ms、1 线程 5735 ms。teacher GPU 约 535 ms。
 - 复现副本：datasets_final_20261103/recipes/vlenc300m_20261103/（脚本、命令、MODEL_300M.md、eval、latency、data_manifest.md5）。
 - 未部署、未动生产、未启动新训练。候选下一步（需批准）：与生产 A 端到端对比；续训 30k；ONNX/fp16 导出；用它重打伪标签蒸馏 28M。
 
 ### 2026-11-04 16:07 北京 VLEnc300M 续训至 30k 完成（详见 docs/MODEL_300M.md）
 - 从 `checkpoints/vlenc300m_20261103/` 的 step 15000 续训。该目录保留。新学习率：warmup 500 步升到原先峰值的 0.3 倍，再 cosine 到 step 30000。输出 `checkpoints/vlenc300m_30k_20261104/`，best.pt = last.pt = step 30000（best 按 val_real）。
-- 金标 exact single227/unseen59/orig63/long45：30k **168/46/54/20**；15k 167/45/54/18；VL-FT v1 teacher 159/48/51/18；distill3 144/41/47/17。val_real 574/600（15k 570/600）。1-NED 约 0.9419/0.9642/0.9883/0.8568。multi8 仍 0/8。
+- 金标 exact single227/unseen59/orig63/long45：30k **168/46/54/20**；15k 167/45/54/18；VL-FT v1 teacher 159/48/51/18；distill3 144/41/47/17。val_real 574/600（15k 570/600）。1-NED 约 0.9419/0.9642/0.9883/0.8568。multi8 仍 0/8（历史记录，不再作为目标；见 Decisions 2026-11-04）。
 - step 24000 金标峰值 170/47/55/20（val_real 573），未单独存 ckpt。
 - 结构未改，延迟不变（GPU 约 58–64 ms；已测 bf16 57.5 / fp32 63.7，见 docs/MODEL_300M.md）。未部署，未改生产代码与路由。
+
+## Standing decision (2026-11-04 Asia/Shanghai): drop multi-seal (multi8) recognition
+
+- Multi-seal (multi8) recognition stops. Do not train, evaluate, or add routing for an image or crop that contains more than one seal.
+- Production path: the vision/detection API crops first, then recognition runs only on those single-seal crops.
+- Prior multi8 metrics in this file stay as historical notes only. That includes whole-crop best 1-NED, detector-split exact and 1-NED, mask-out scores on 16 seals, the VL 8/16 and 7/16 line counts, and the VLEnc300M notes that multi8 is still 0. They are not a current target.
+- Production code and model routing are unchanged. No model was swapped.
