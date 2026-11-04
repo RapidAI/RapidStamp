@@ -887,3 +887,10 @@ Findings and recommendation:
 - CUT v3a / v3b on znsoft-gpu: 20k steps each, init runs/cut_v1/last.pt, stronger text/edge losses; runs/cut_v3{a,b}, refined data data/refined_cut_v3{a,b}, metrics runs/realism_v3/*.json, contact sheet runs/realism_v3/synth_contact_v3.jpg. (v3b OCR filter OOM'd when both ran together; rerun alone 2026-11-04.)
 - Realism (400 vs 400; KID lower better, probe closer to 50% better; real-vs-real 47.8%): v1 0.0306/97.0%; stage1_v3 raw 0.0143/95.0%; v3a all 0.0153/95.75%, kept 0.0137/95.9% (6,836 kept); v3b all 0.0150/95.75%, kept 0.0137/96.5% (6,849 kept). OCR exact: stage1_v3 35.3%, refined ~34.2%.
 - Both metrics beat v1, so code pushed to RapidAI/seal_generator main (b5d88e2, first commit; docs/RESULTS_v3.md). Note: the gain comes almost entirely from stage-1 fixes; the refiner is ~neutral. Recommended training set: stage1_v3 (or v3b kept).
+
+### 2026-11-04 09:40 北京 300M 学生 VLEnc300M 完成（详见 docs/MODEL_300M.md）
+- 训练 2026-11-03 14:14–20:59 UTC，15,000 步，1.61 s/step，显存 31.4GB；best.pt = last = step15000（val_real 570/600），md5 dc714f81a089aae9582314b642351a76。
+- 金标 exact single227/unseen59/orig63/long45 = **167/45/54/18**；对比 VL-FT v1 teacher 159/48/51/18、原始 PaddleOCR-VL 144/39/50/18、distill3 144/41/47/17。single227 首次超过 teacher，unseen59 低 3。multi8 仍 0。
+- 延迟（vlenc300m_20261103/bench_latency.py，gold 前 40 张 bs1 中位）：GPU fp32 63.7 ms、bf16 57.5 ms（仅编码 34.9 ms）；CPU 8 线程 1828 ms、1 线程 5735 ms。teacher GPU 约 535 ms。
+- 复现副本：datasets_final_20261103/recipes/vlenc300m_20261103/（脚本、命令、MODEL_300M.md、eval、latency、data_manifest.md5）。
+- 未部署、未动生产、未启动新训练。候选下一步（需批准）：与生产 A 端到端对比；续训 30k；ONNX/fp16 导出；用它重打伪标签蒸馏 28M。
