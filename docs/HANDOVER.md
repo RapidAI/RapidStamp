@@ -894,3 +894,9 @@ Findings and recommendation:
 - 延迟（vlenc300m_20261103/bench_latency.py，gold 前 40 张 bs1 中位）：GPU fp32 63.7 ms、bf16 57.5 ms（仅编码 34.9 ms）；CPU 8 线程 1828 ms、1 线程 5735 ms。teacher GPU 约 535 ms。
 - 复现副本：datasets_final_20261103/recipes/vlenc300m_20261103/（脚本、命令、MODEL_300M.md、eval、latency、data_manifest.md5）。
 - 未部署、未动生产、未启动新训练。候选下一步（需批准）：与生产 A 端到端对比；续训 30k；ONNX/fp16 导出；用它重打伪标签蒸馏 28M。
+
+### 2026-11-04 16:07 北京 VLEnc300M 续训至 30k 完成（详见 docs/MODEL_300M.md）
+- 从 `checkpoints/vlenc300m_20261103/` 的 step 15000 续训。该目录保留。新学习率：warmup 500 步升到原先峰值的 0.3 倍，再 cosine 到 step 30000。输出 `checkpoints/vlenc300m_30k_20261104/`，best.pt = last.pt = step 30000（best 按 val_real）。
+- 金标 exact single227/unseen59/orig63/long45：30k **168/46/54/20**；15k 167/45/54/18；VL-FT v1 teacher 159/48/51/18；distill3 144/41/47/17。val_real 574/600（15k 570/600）。1-NED 约 0.9419/0.9642/0.9883/0.8568。multi8 仍 0/8。
+- step 24000 金标峰值 170/47/55/20（val_real 573），未单独存 ckpt。
+- 结构未改，延迟不变（GPU 约 58–64 ms；已测 bf16 57.5 / fp32 63.7，见 docs/MODEL_300M.md）。未部署，未改生产代码与路由。
